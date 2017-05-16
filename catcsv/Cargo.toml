@@ -1,6 +1,6 @@
 [package]
 name = "catcsv"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Eric Kidd <git@randomhacks.net>"]
 
 description = "Concatenate directories of (possibly-compressed CSV) files into one CSV file"

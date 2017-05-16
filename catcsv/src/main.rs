@@ -94,7 +94,7 @@ fn run() -> Result<()> {
     let args: Args = Docopt::new(USAGE)
         .and_then(|dopt| dopt.decode())
         .unwrap_or_else(|e| e.exit());
-    trace!("{:?}", args);
+    debug!("{:?}", args);
 
     // Report our version.
     if args.flag_version {
@@ -110,10 +110,15 @@ fn run() -> Result<()> {
     // Iterate over our arguments.  We do this without using recursion, mostly
     // to see how that looks in Rust.
     let mut first_headers: Option<Vec<ByteString>> = None;
+    let mut files_processed: u64 = 0;
     for input in &args.arg_input_file_or_dir {
-        for entry in WalkDir::new(input) {
+        for entry in WalkDir::new(input).follow_links(true) {
             let entry = entry?;
-            if entry.file_type().is_file() {
+
+            // We want to skip directories, but process files _and_ pipes.
+            // Pipes are critical when working with Pachyderm, which uses
+            // named pipes for inputs.
+            if !entry.file_type().is_dir() {
                 debug!("Found file: {}", entry.path().display());
                 let filename: Cow<str> = entry.file_name().to_string_lossy();
                 let path = entry.path();
@@ -121,10 +126,12 @@ fn run() -> Result<()> {
 
                 // Check the filename to see if we can handle this file type.
                 if filename.ends_with(".csv") {
+                    debug!("Processing as *.csv");
                     let mut file = File::open(path).chain_err(&mkerr)?;
                     output_csv(&mut file, &mut first_headers, &mut out)
                         .chain_err(&mkerr)?;
                 } else if filename.ends_with(".csv.sz") {
+                    debug!("Processing as *.csv.sz");
                     let file = File::open(path).chain_err(&mkerr)?;
                     let mut decompressed = snap::Reader::new(file);
                     output_csv(&mut decompressed, &mut first_headers, &mut out)
@@ -134,8 +141,17 @@ fn run() -> Result<()> {
                                       path.display());
                     return Err(msg.into());
                 }
+
+                // Keep track of how many files we processed.
+                files_processed += 1;
             }
         }
+    }
+
+    // If we don't have any files, we won't produce any headers, so
+    // fail with an error.
+    if files_processed == 0 {
+        return Err("No input CSV files found".into());
     }
 
     Ok(())
@@ -167,6 +183,7 @@ fn output_csv(file: &mut Read,
             return Err("CSV headers are different from the first file's".into());
         }
     } else {
+        debug!("Using headers: {}", first_line);
         *first_headers = Some(headers);
         output.write_all(first_line.as_bytes())?;
     }
