@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::default::Default;
 use std::io::prelude::*;
+use std::str::from_utf8;
 
 use errors::*;
 
@@ -46,7 +47,7 @@ impl Classifier {
     /// Given a zip code, return the geochunk identifier.  Returns an error
     /// if the `zip` code is invalid.
     pub fn chunk_for(&self, zip: &str) -> Result<&str> {
-        for i_rev in 0..(ZIP_CODE_LENGTH+1) {
+        for i_rev in 0..(ZIP_CODE_LENGTH + 1) {
             let i = ZIP_CODE_LENGTH - i_rev;
             if let Some(chunk_id) = self.chunk_id_for_prefix.get(&zip[..i]) {
                 return Ok(chunk_id);
@@ -70,37 +71,48 @@ impl Classifier {
     }
 
     /// Read a CSV file, add a geochunk column, and write it back out again.
-    pub fn transform_csv(&self, input_column: &str, input: &mut Read, output: &mut Write) -> Result<()> {
+    pub fn transform_csv(&self,
+                         input_column: &str,
+                         input: &mut Read,
+                         output: &mut Write)
+                         -> Result<()> {
         let mut rdr = csv::Reader::from_reader(input);
         let mut wtr = csv::WriterBuilder::new()
             .has_headers(false)
             .from_writer(output);
 
+
         // Extract our headers.
-        let mut headers = rdr.headers()?.into_iter().map(|s| s.to_owned()).collect::<Vec<String>>();
+        let mut headers = rdr.headers()?.to_owned();
 
         // Look up the header index for our zip code column.
-        let zip_col_idx = headers.iter()
+        let zip_col_idx = headers
+            .iter()
             .position(|h| h == input_column)
             .ok_or_else(|| -> Error {
-                format!("Cannot find column \"{}\" in CSV input", input_column).into()
-            })?;
+                            format!("Cannot find column \"{}\" in CSV input",
+                                    input_column)
+                                    .into()
+                        })?;
 
         // Add our output column and write our headers.
-        headers.push(self.geochunk_column_name());
-        wtr.serialize(&headers)?;
+        headers.push_field(&self.geochunk_column_name());
+        wtr.write_record(headers.iter())?;
 
-        // We'd prefer to `byte_records` to get raw binary data without UTF-8
-        // validation for speed, since we may have enormous numbers of rows and
-        // hundreds of columns. But see https://github.com/BurntSushi/rust-csv/issues/76
-        //
-        // This loop can be made a lot faster once upstream is fixed, by clever
-        // elimination of allocations and UTF-8 validity checking.
-        for row in rdr.records() {
-            let mut row = row?.into_iter().map(|s| s.to_owned()).collect::<Vec<_>>();
-            let zip = row[zip_col_idx].clone();
-            row.push(self.chunk_for(&zip)?.to_owned());
-            wtr.serialize(&row)?;
+        // According to BurntSushi at
+        // https://github.com/BurntSushi/rust-csv/issues/76 ,
+        // this should be the fastest way to write this loop.  This matters
+        // because we may have millions of rows and hundreds of columns.
+        let mut row = csv::ByteRecord::new();
+        while rdr.read_byte_record(&mut row)? {
+            let zip = from_utf8(&row[zip_col_idx])
+                .chain_err(|| -> Error {
+                    let msg = format!("Could not parse zip code as UTF-8 at line {:?}",
+                                       row.position());
+                    msg.into()
+                })?.to_owned();
+            row.push_field(self.chunk_for(&zip)?.as_bytes());
+            wtr.write_byte_record(&row)?;
         }
         Ok(())
     }
@@ -131,10 +143,10 @@ impl PrefixPopulation {
 
         let mut rdr = csv::Reader::from_reader(ZIP_POPULATION_CSV.as_bytes());
         for row in rdr.records() {
-            let (zip, pop): (String, u64) = row
-                .expect("Invalid CSV data built into executable")
-                .deserialize(None)
-                .expect("Invalid CSV data built into executable");
+            let (zip, pop): (String, u64) =
+                row.expect("Invalid CSV data built into executable")
+                    .deserialize(None)
+                    .expect("Invalid CSV data built into executable");
 
             // For each prefix of this zip code, increment the population of
             // that prefix.
@@ -209,7 +221,10 @@ impl PrefixPopulation {
                 }
                 chunk_pop += child_pop;
                 let chunk_id = format!("{}_{}", prefix, chunk_idx);
-                trace!("Mapping {} (pop {}) to {}", child_prefix, child_pop, chunk_id);
+                trace!("Mapping {} (pop {}) to {}",
+                       child_prefix,
+                       child_pop,
+                       chunk_id);
                 chunk_id_for_prefix.insert(child_prefix, chunk_id);
             }
         }
