@@ -16,6 +16,7 @@ extern crate rustc_serialize;
 
 use docopt::Docopt;
 use rustc_serialize::{Decodable, Decoder};
+use std::io;
 use std::process;
 use std::result;
 
@@ -96,6 +97,16 @@ fn run() -> Result<()> {
     let population = args.arg_population
         .expect("Population should have been required by docopt");
     let classifier = zip2010::Classifier::new(population);
+
+    // Dispatch to an appropriate command handler.
+    if args.cmd_export {
+        let stdout = io::stdout();
+        classifier.export(&mut stdout.lock())?;
+    } else if args.cmd_csv {
+        unimplemented!();
+    } else {
+        unreachable!("unknown subcommand, should have been caught by docopt");
+    }
 
     Ok(())
 }

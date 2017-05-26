@@ -6,6 +6,7 @@ use env_logger;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::default::Default;
+use std::io::prelude::*;
 
 use errors::*;
 
@@ -35,6 +36,13 @@ impl Classifier {
         }
     }
 
+    /// Return the column name to use for the geochunk column.  This encodes
+    /// the parameters we used to configure the geochunks, to help prevent
+    /// messing them up in the real world.
+    pub fn geochunk_column_name(&self) -> String {
+        format!("geochunk_zip2010_{}", self.target_population)
+    }
+
     /// Given a zip code, return the geochunk identifier.  Returns an error
     /// if the `zip` code is invalid.
     pub fn chunk_for(&self, zip: &str) -> Result<&str> {
@@ -45,6 +53,18 @@ impl Classifier {
             }
         }
         Err(format!("Cannot find chunk for zip code \"{}\"", zip).into())
+    }
+
+    /// Export this mapping as a CSV file.
+    pub fn export(&self, out: &mut Write) -> Result<()> {
+        let mut wtr = csv::Writer::from_writer(out);
+        wtr.write(["zip", &self.geochunk_column_name()].iter())?;
+        for zip_int in 0..100000 {
+            let zip = format!("{:05}", zip_int);
+            let chunk_id = self.chunk_for(&zip)?;
+            wtr.write([&zip[..], &chunk_id].iter())?;
+        }
+        Ok(())
     }
 }
 
