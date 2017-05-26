@@ -57,12 +57,50 @@ impl Classifier {
 
     /// Export this mapping as a CSV file.
     pub fn export(&self, out: &mut Write) -> Result<()> {
-        let mut wtr = csv::Writer::from_writer(out);
-        wtr.write(["zip", &self.geochunk_column_name()].iter())?;
+        let mut wtr = csv::WriterBuilder::new()
+            .has_headers(false)
+            .from_writer(out);
+        wtr.serialize(["zip", &self.geochunk_column_name()])?;
         for zip_int in 0..100000 {
             let zip = format!("{:05}", zip_int);
             let chunk_id = self.chunk_for(&zip)?;
-            wtr.write([&zip[..], &chunk_id].iter())?;
+            wtr.serialize([&zip[..], &chunk_id])?;
+        }
+        Ok(())
+    }
+
+    /// Read a CSV file, add a geochunk column, and write it back out again.
+    pub fn transform_csv(&self, input_column: &str, input: &mut Read, output: &mut Write) -> Result<()> {
+        let mut rdr = csv::Reader::from_reader(input);
+        let mut wtr = csv::WriterBuilder::new()
+            .has_headers(false)
+            .from_writer(output);
+
+        // Extract our headers.
+        let mut headers = rdr.headers()?.into_iter().map(|s| s.to_owned()).collect::<Vec<String>>();
+
+        // Look up the header index for our zip code column.
+        let zip_col_idx = headers.iter()
+            .position(|h| h == input_column)
+            .ok_or_else(|| -> Error {
+                format!("Cannot find column \"{}\" in CSV input", input_column).into()
+            })?;
+
+        // Add our output column and write our headers.
+        headers.push(self.geochunk_column_name());
+        wtr.serialize(&headers)?;
+
+        // We'd prefer to `byte_records` to get raw binary data without UTF-8
+        // validation for speed, since we may have enormous numbers of rows and
+        // hundreds of columns. But see https://github.com/BurntSushi/rust-csv/issues/76
+        //
+        // This loop can be made a lot faster once upstream is fixed, by clever
+        // elimination of allocations and UTF-8 validity checking.
+        for row in rdr.records() {
+            let mut row = row?.into_iter().map(|s| s.to_owned()).collect::<Vec<_>>();
+            let zip = row[zip_col_idx].clone();
+            row.push(self.chunk_for(&zip)?.to_owned());
+            wtr.serialize(&row)?;
         }
         Ok(())
     }
@@ -91,10 +129,12 @@ impl PrefixPopulation {
     fn new() -> PrefixPopulation {
         let mut maps = PrefixPopulationMaps::default();
 
-        let mut rdr = csv::Reader::from_string(ZIP_POPULATION_CSV);
-        for row in rdr.decode() {
-            let (zip, pop): (String, u64) =
-                row.expect("Invalid CSV data built into executable");
+        let mut rdr = csv::Reader::from_reader(ZIP_POPULATION_CSV.as_bytes());
+        for row in rdr.records() {
+            let (zip, pop): (String, u64) = row
+                .expect("Invalid CSV data built into executable")
+                .deserialize(None)
+                .expect("Invalid CSV data built into executable");
 
             // For each prefix of this zip code, increment the population of
             // that prefix.

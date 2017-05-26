@@ -4,7 +4,7 @@ version = "0.1.0"
 dependencies = [
  "cli_test_dir 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "clippy 0.0.134 (registry+https://github.com/rust-lang/crates.io-index)",
- "csv 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "csv 1.0.0-beta.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "docopt 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "env_logger 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -97,12 +97,19 @@ dependencies = [
 
 [[package]]
 name = "csv"
-version = "0.15.0"
+version = "1.0.0-beta.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "byteorder 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "csv-core 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.8 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "csv-core"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
  "memchr 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "rustc-serialize 0.3.24 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -409,7 +416,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum cli_test_dir 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "7d007f296318f655a55cd63548d04729bf3d482fe779109c2d82716b305429db"
 "checksum clippy 0.0.134 (registry+https://github.com/rust-lang/crates.io-index)" = "0bfb9a8439e8e42756cbd59d012cf18fbc114b6eb92e5e21c707ceef7212bd0a"
 "checksum clippy_lints 0.0.134 (registry+https://github.com/rust-lang/crates.io-index)" = "0002cda23b4ba78c650af739ee7e76cdedb3aeff0f0c98170b778fdb26598bce"
-"checksum csv 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)" = "7ef22b37c7a51c564a365892c012dc0271221fdcc64c69b19ba4d6fa8bd96d9c"
+"checksum csv 1.0.0-beta.3 (registry+https://github.com/rust-lang/crates.io-index)" = "158edc15f3da84af2ae2689ab84157f7f94a21dff3dec455320cf44be8963433"
+"checksum csv-core 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "ed4919aaefb12f555bb4e34aa6415b5db7e20e01e517427f13c2bde286ae9b53"
 "checksum dbghelp-sys 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "97590ba53bcb8ac28279161ca943a924d1fd4a8fb3fa63302591647c4fc5b850"
 "checksum docopt 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ab32ea6e284d87987066f21a9e809a73c14720571ef34516f0890b3d355ccfd8"
 "checksum dtoa 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)" = "80c8b71fd71146990a9742fc06dcbbde19161a267e0ad4e572c35162f4578c90"

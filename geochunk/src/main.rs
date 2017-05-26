@@ -103,7 +103,10 @@ fn run() -> Result<()> {
         let stdout = io::stdout();
         classifier.export(&mut stdout.lock())?;
     } else if args.cmd_csv {
-        unimplemented!();
+        let stdin = io::stdin();
+        let stdout = io::stdout();
+        let column = args.arg_input_column.expect("Column should have been required by docopt");
+        classifier.transform_csv(&column, &mut stdin.lock(), &mut stdout.lock())?;
     } else {
         unreachable!("unknown subcommand, should have been caught by docopt");
     }
