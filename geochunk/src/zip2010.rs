@@ -81,7 +81,6 @@ impl Classifier {
             .has_headers(false)
             .from_writer(output);
 
-
         // Extract our headers.
         let mut headers = rdr.headers()?.to_owned();
 
@@ -89,11 +88,7 @@ impl Classifier {
         let zip_col_idx = headers
             .iter()
             .position(|h| h == input_column)
-            .ok_or_else(|| -> Error {
-                            format!("Cannot find column \"{}\" in CSV input",
-                                    input_column)
-                                    .into()
-                        })?;
+            .ok_or_else(|| Error::no_such_column(input_column))?;
 
         // Add our output column and write our headers.
         headers.push_field(&self.geochunk_column_name());
@@ -106,11 +101,8 @@ impl Classifier {
         let mut row = csv::ByteRecord::new();
         while rdr.read_byte_record(&mut row)? {
             let zip = from_utf8(&row[zip_col_idx])
-                .chain_err(|| -> Error {
-                    let msg = format!("Could not parse zip code as UTF-8 at line {:?}",
-                                       row.position());
-                    msg.into()
-                })?.to_owned();
+                .chain_err(|| Error::non_utf8_zip(row.position()))?
+                .to_owned();
             row.push_field(self.chunk_for(&zip)?.as_bytes());
             wtr.write_byte_record(&row)?;
         }
