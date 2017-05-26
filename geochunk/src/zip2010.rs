@@ -44,7 +44,7 @@ impl Classifier {
                 return Ok(chunk_id);
             }
         }
-        Ok("")
+        Err(format!("Cannot find chunk for zip code \"{}\"", zip).into())
     }
 }
 
