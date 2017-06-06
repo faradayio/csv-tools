@@ -35,6 +35,7 @@ fn csv_zip2010_adds_column_to_csv_file() {
     let input = "\
 name,postcode
 J. Doe,90210
+H. Smith,
 ";
     let output = testdir
         .cmd()
@@ -45,5 +46,6 @@ J. Doe,90210
                "\
 name,postcode,geochunk_zip2010_250000
 J. Doe,90210,902_0
+H. Smith,,
 ");
 }

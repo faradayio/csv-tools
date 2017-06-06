@@ -47,6 +47,14 @@ impl Classifier {
     /// Given a zip code, return the geochunk identifier.  Returns an error
     /// if the `zip` code is invalid.
     pub fn chunk_for(&self, zip: &str) -> Result<&str> {
+        if zip.len() == 0 {
+            // Empty zip codes map to empty chunk IDs, because of how CSV
+            // files tend to represent missing values.
+            return Ok("");
+        } else if zip.len() < ZIP_CODE_LENGTH {
+            return Err(format!("Not a zip code: \"{}\"", zip).into());
+        }
+
         for i_rev in 0..(ZIP_CODE_LENGTH + 1) {
             let i = ZIP_CODE_LENGTH - i_rev;
             if let Some(chunk_id) = self.chunk_id_for_prefix.get(&zip[..i]) {
