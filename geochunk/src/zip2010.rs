@@ -186,8 +186,9 @@ impl PrefixPopulation {
                               prefix: &str,
                               chunk_id_for_prefix: &mut HashMap<String, String>) {
         let prefix_pop = self.lookup(prefix);
-        if prefix_pop <= target_population {
-            // We're small enough to fill a chunk on our own.
+        if prefix_pop <= target_population || prefix.len() == ZIP_CODE_LENGTH {
+            // We're small enough to fill a chunk on our own, or we can't be
+            // split any further.
             trace!("Mapping {} (pop {}) to {}", prefix, prefix_pop, prefix);
             chunk_id_for_prefix.insert(prefix.to_owned(), prefix.to_owned());
         } else {

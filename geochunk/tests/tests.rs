@@ -30,6 +30,18 @@ fn export_zip2010_outputs_csv() {
 }
 
 #[test]
+fn export_zip2010_handles_small_chunk_sizes() {
+    let testdir = TestDir::new("geochunk", "export_zip2010_outputs_csv");
+    let output = testdir
+        .cmd()
+        .args(&["export", "zip2010", "10000"])
+        .expect_success();
+    assert!(output
+                .stdout_str()
+                .contains("zip,geochunk_zip2010_10000"));
+}
+
+#[test]
 fn csv_zip2010_adds_column_to_csv_file() {
     let testdir = TestDir::new("geochunk", "export_zip2010_outputs_csv");
     let input = "\
