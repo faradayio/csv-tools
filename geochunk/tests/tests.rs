@@ -34,11 +34,12 @@ fn export_zip2010_handles_small_chunk_sizes() {
     let testdir = TestDir::new("geochunk", "export_zip2010_outputs_csv");
     let output = testdir
         .cmd()
-        .args(&["export", "zip2010", "10000"])
+        // 0 is the smallest imaginable chunk.
+        .args(&["export", "zip2010", "0"])
         .expect_success();
     assert!(output
                 .stdout_str()
-                .contains("zip,geochunk_zip2010_10000"));
+                .contains("zip,geochunk_zip2010_0"));
 }
 
 #[test]
