@@ -3,6 +3,7 @@
 use csv;
 #[cfg(test)]
 use env_logger;
+use regex::Regex;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::default::Default;
@@ -44,24 +45,37 @@ impl Classifier {
         format!("geochunk_zip2010_{}", self.target_population)
     }
 
-    /// Given a zip code, return the geochunk identifier.  Returns an error
-    /// if the `zip` code is invalid.
-    pub fn chunk_for(&self, zip: &str) -> Result<&str> {
-        if zip.len() == 0 {
-            // Empty zip codes map to empty chunk IDs, because of how CSV
-            // files tend to represent missing values.
-            return Ok("");
-        } else if zip.len() < ZIP_CODE_LENGTH {
-            return Err(format!("Not a zip code: \"{}\"", zip).into());
+    /// Given a zip code, return the geochunk identifier.  Returns `None` if the
+    /// zip code is invalid.
+    pub fn chunk_for(&self, zip: &str) -> Option<&str> {
+        if zip.len() < ZIP_CODE_LENGTH {
+            // We may see empty zip codes (which is how CSV typically represents
+            // a null field), or we may see corrupt or invalid zip codes. We map
+            // all of these to the null geochunk.
+            return None;
         }
 
+        // Look for increasingly shorter prefixes in our table.
         for i_rev in 0..(ZIP_CODE_LENGTH + 1) {
             let i = ZIP_CODE_LENGTH - i_rev;
             if let Some(chunk_id) = self.chunk_id_for_prefix.get(&zip[..i]) {
-                return Ok(chunk_id);
+                return Some(chunk_id);
             }
         }
-        Err(format!("Cannot find chunk for zip code \"{}\"", zip).into())
+
+        // We couldn't find a chunk for this zip code, so let's make sure
+        // it actually is a zip code, and handle it appropriately.
+        lazy_static! {
+            static ref ZIP_RE: Regex = Regex::new("^[0-9]{5}")
+                .expect("cannot parse zip code regular expression");
+        }
+        if ZIP_RE.is_match(zip) {
+            // This looks like a ZIP code, and we should have handled it.
+            unreachable!("shoud have found chunk for zip code {:?}", zip);
+        } else {
+            // This doesn't look like a ZIP code, so we map it to null.
+            None
+        }
     }
 
     /// Export this mapping as a CSV file.
@@ -72,7 +86,9 @@ impl Classifier {
         wtr.serialize(["zip", &self.geochunk_column_name()])?;
         for zip_int in 0..100000 {
             let zip = format!("{:05}", zip_int);
-            let chunk_id = self.chunk_for(&zip)?;
+            let chunk_id = self.chunk_for(&zip)
+                // This is a genuine assertion failure.
+                .expect("all zip codes should have a chunk");
             wtr.serialize([&zip[..], &chunk_id])?;
         }
         Ok(())
@@ -111,7 +127,9 @@ impl Classifier {
             let zip = from_utf8(&row[zip_col_idx])
                 .chain_err(|| Error::non_utf8_zip(row.position()))?
                 .to_owned();
-            row.push_field(self.chunk_for(&zip)?.as_bytes());
+            // If there's no chunk, just output the empty string, which is
+            // as CSV null.
+            row.push_field(self.chunk_for(&zip).unwrap_or("").as_bytes());
             wtr.write_byte_record(&row)?;
         }
         Ok(())
@@ -124,6 +142,27 @@ fn classifies_sample_zip_codes_as_expected() {
     let classifier = Classifier::new(250000);
     assert_eq!(classifier.chunk_for("01000").unwrap(), "010_0");
     assert_eq!(classifier.chunk_for("07720").unwrap(), "077_1");
+    assert_eq!(classifier.chunk_for("99577-0727").unwrap(), "995_1");
+}
+
+#[test]
+fn does_not_assign_geochunks_to_missing_or_invalid_zips() {
+    let _ = env_logger::init();
+    let classifier = Classifier::new(250000);
+    assert!(classifier.chunk_for("").is_none());
+    assert!(classifier.chunk_for("0").is_none());
+    assert!(classifier.chunk_for("None").is_none());
+}
+
+#[test]
+fn does_not_panic_on_corner_cases() {
+    let _ = env_logger::init();
+    let classifier = Classifier::new(250000);
+    // I don't actually care whether or not this is mapped to a geochunk or
+    // not, because we don't try to do detailed validation until _after_
+    // lookup fails, for performance reasons. All I care about is that this
+    // doesn't crash.
+    classifier.chunk_for("815XX");
 }
 
 type PrefixPopulationMaps = [HashMap<String, u64>; ZIP_CODE_LENGTH + 1];
