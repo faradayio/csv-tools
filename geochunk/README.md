@@ -2,6 +2,14 @@
 
 `geochunk` is intended for use in a distributed system.  It provides a deterministic mapping from zip codes to "geochunks" that you can count on remaining stable.  Geochunks will try to approximate the population size that you specify.
 
+See [this blog post on geochunk][blog] for an introduction and some pretty pictures.
+
+[blog]: http://blog.faraday.io/geochunk-fast-intelligent-splitting-for-piles-of-address-data/
+
+## Usage
+
+Run `geochunk --help` for usage instructions.
+
 ```
 geochunk - Partition data sets by estimated population.
 
