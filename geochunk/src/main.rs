@@ -15,10 +15,13 @@ extern crate lazy_static;
 #[macro_use]
 extern crate log;
 extern crate regex;
-extern crate rustc_serialize;
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
 
 use docopt::Docopt;
-use rustc_serialize::{Decodable, Decoder};
+use serde::{Deserialize, Deserializer};
+use serde::de::Error as DeError;
 use std::io;
 use std::process;
 use std::result;
@@ -35,14 +38,20 @@ enum ChunkType {
     Zip2010,
 }
 
-// Implement the deprecated `rustc_serialize::Decodable` interface so that
-// `docopt` can automatically parse this argument type from a string value.
-impl Decodable for ChunkType {
-    fn decode<D: Decoder>(d: &mut D) -> result::Result<Self, D::Error> {
-        let s = d.read_str()?;
+// Implement the `Deserialize` interface so that `docopt` can automatically
+// parse this argument type from a string value.
+impl<'de> Deserialize<'de> for ChunkType {
+    fn deserialize<D>(deserializer: D) -> result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
         match &s[..] {
             "zip2010" => Ok(ChunkType::Zip2010),
-            _ => Err(d.error(&format!("Unknown chunk type \"{}\", try --help", s))),
+            _ => {
+                let msg = format!("Unknown chunk type \"{}\", try --help", s);
+                Err(D::Error::custom(msg))
+            }
         }
     }
 }
@@ -69,7 +78,7 @@ Types:
 
 /// Our command-line arguments, which can be automatically deserialized by
 /// `docopt`.
-#[derive(Debug, RustcDecodable)]
+#[derive(Debug, Deserialize)]
 struct Args {
     cmd_export: bool,
     cmd_csv: bool,
@@ -86,7 +95,7 @@ quick_main!(run);
 fn run() -> Result<()> {
     env_logger::init().expect("Could not initialize logging");
     let args: Args = Docopt::new(USAGE)
-        .and_then(|d| d.decode())
+        .and_then(|d| d.deserialize())
         .unwrap_or_else(|e| e.exit());
     trace!("{:?}", args);
 
