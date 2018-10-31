@@ -2,6 +2,12 @@
 
 You can do this with `awk`, but this should be faster.
 
+To install:
+
+```sh
+cargo install -f --git https://github.com/faradayio/fixed2csv.git fixed2csv
+```
+
 Given an input file `input.txt`:
 
 ```txt
