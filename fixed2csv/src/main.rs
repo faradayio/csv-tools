@@ -8,11 +8,11 @@ extern crate log;
 extern crate structopt;
 
 use failure::Error;
-use humansize::{FileSize, file_size_opts};
+use humansize::{file_size_opts, FileSize};
 use humantime::format_duration;
 use std::{
     cmp::min,
-    io::{BufReader, prelude::*, stdin, stdout},
+    io::{prelude::*, stdin, stdout, BufReader},
     time::{Duration, SystemTime},
 };
 use structopt::StructOpt;
@@ -50,10 +50,12 @@ fn main() -> Result<(), Error> {
         };
         eprintln!(
             "Processed {} in {}, {}/s",
-            total.file_size(file_size_opts::BINARY)
+            total
+                .file_size(file_size_opts::BINARY)
                 .expect("size can never be negative"),
             format_duration(simple_elapsed),
-            (total as u64 / elapsed.as_secs()).file_size(file_size_opts::BINARY)
+            (total as u64 / elapsed.as_secs())
+                .file_size(file_size_opts::BINARY)
                 .expect("size can never be negative"),
         );
     }
@@ -86,7 +88,7 @@ fn extract_fields(
         // Calculate `end`, the length of our line with any trailing '\r' or
         // '\n' character stripped.
         let mut end = line.len() - 1;
-        if end > 0 && line[end-1] == b'\r' {
+        if end > 0 && line[end - 1] == b'\r' {
             end -= 1;
         }
 
@@ -94,11 +96,11 @@ fn extract_fields(
         let mut offset = 0;
         for width in field_widths {
             // Get our column.
-            let mut field = &line[min(offset, end)..min(offset+width, end)];
+            let mut field = &line[min(offset, end)..min(offset + width, end)];
 
             // Strip spaces and add to our output record.
-            while field.len() > 0 && field[field.len()-1] == b' ' {
-                field = &field[..field.len()-1];
+            while field.len() > 0 && field[field.len() - 1] == b' ' {
+                field = &field[..field.len() - 1];
             }
             record.push_field(field);
 
@@ -123,7 +125,7 @@ first     last      middle
 John      Smith     Q
 Sally     Jones
 ";
-    let cols = &[10,10,6];
+    let cols = &[10, 10, 6];
     let expected = "\
 first,last,middle
 John,Smith,Q
