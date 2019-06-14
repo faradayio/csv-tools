@@ -5,7 +5,7 @@ use failure::format_err;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, collections::HashMap};
 
-use super::Result;
+use crate::Result;
 
 /// An address record that we can pass to SmartyStreets.
 ///
@@ -42,7 +42,7 @@ pub enum ColumnKeyOrKeys<K: Eq> {
 }
 
 impl ColumnKeyOrKeys<usize> {
-    /// Given a CSV row, extract an `Address` value to send to Smartystreets.
+    /// Given a CSV row, extract an `Address` value to send to SmartyStreets.
     pub fn extract_from_record<'a>(
         &self,
         record: &'a StringRecord,
@@ -83,7 +83,7 @@ pub struct AddressColumnKeys<K: Default + Eq> {
 }
 
 impl AddressColumnKeys<usize> {
-    /// Given a CSV row, extract an `Address` value to send to Smartystreets.
+    /// Given a CSV row, extract an `Address` value to send to SmartyStreets.
     pub fn extract_address_from_record<'a>(
         &self,
         record: &'a StringRecord,

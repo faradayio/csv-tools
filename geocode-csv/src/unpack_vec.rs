@@ -2,7 +2,7 @@
 
 use failure::format_err;
 
-use super::Result;
+use crate::Result;
 
 /// Given a vector `input`, an expected output vector length `output_len` and a
 /// function `idx_fn` that maps input values to output indices, assemble an

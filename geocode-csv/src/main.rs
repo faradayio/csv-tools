@@ -15,6 +15,8 @@ use std::{env, result, str};
 use url::Url;
 
 mod addresses;
+mod smartystreets;
+mod structure;
 mod unpack_vec;
 
 type Result<T> = result::Result<T, Error>;
@@ -26,7 +28,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-/// Example call to Smartystreetss.
+/// Example call to SmartyStreets.
 async fn geocode_example() -> Result<()> {
     // Build our URL.
     let mut url = Url::parse("https://api.smartystreets.com/street-address")?;
