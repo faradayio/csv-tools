@@ -1,31 +1,24 @@
 //! Types related to addresses.
 
 use csv::StringRecord;
-use failure::format_err;
+use failure::{format_err, ResultExt};
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, collections::HashMap};
+use std::{borrow::Cow, collections::HashMap, fs::File, path::Path};
 
 use crate::Result;
 
 /// An address record that we can pass to SmartyStreets.
-///
-/// We make careful use of `&str` (string slices) and `Cow<str>` ("copy on
-/// write" strings, which may be either borrowed or owned) to prevent allocating
-/// lots of memory in our inner loop.
-///
-/// The makes the code a bit trickier, but this is intended to be run in
-/// parallel on clusters over billions of records.
 #[derive(Debug, Eq, PartialEq, Serialize)]
-pub struct Address<'a> {
+pub struct Address {
     /// Either the street, or the entire address as a string. This must always
     /// be present.
-    pub street: Cow<'a, str>,
+    pub street: String,
     /// The city, if any.
-    pub city: Option<&'a str>,
+    pub city: Option<String>,
     /// The state, if any.
-    pub state: Option<&'a str>,
+    pub state: Option<String>,
     /// The zipcode, if any.
-    pub zipcode: Option<&'a str>,
+    pub zipcode: Option<String>,
 }
 
 /// Either a column name, or a list of names.
@@ -87,12 +80,12 @@ impl AddressColumnKeys<usize> {
     pub fn extract_address_from_record<'a>(
         &self,
         record: &'a StringRecord,
-    ) -> Result<Address<'a>> {
+    ) -> Result<Address> {
         Ok(Address {
-            street: self.street.extract_from_record(record)?,
-            city: self.city.map(|c| &record[c]),
-            state: self.state.map(|s| &record[s]),
-            zipcode: self.zipcode.map(|z| &record[z]),
+            street: self.street.extract_from_record(record)?.into_owned(),
+            city: self.city.map(|c| record[c].to_owned()),
+            state: self.state.map(|s| record[s].to_owned()),
+            zipcode: self.zipcode.map(|z| record[z].to_owned()),
         })
     }
 }
@@ -112,7 +105,7 @@ fn extract_simple_address_from_record() {
     assert_eq!(
         keys.extract_address_from_record(&record).unwrap(),
         Address {
-            street: Cow::Borrowed("1600 Pennsylvania Avenue NW, Washington DC, 20500"),
+            street: "1600 Pennsylvania Avenue NW, Washington DC, 20500".to_owned(),
             city: None,
             state: None,
             zipcode: None,
@@ -139,10 +132,10 @@ fn extract_complex_address_from_record() {
     assert_eq!(
         keys.extract_address_from_record(&record).unwrap(),
         Address {
-            street: Cow::Owned("1600 Pennsylvania Avenue NW".to_owned()),
-            city: Some("Washington"),
-            state: Some("DC"),
-            zipcode: Some("20500"),
+            street: "1600 Pennsylvania Avenue NW".to_owned(),
+            city: Some("Washington".to_owned()),
+            state: Some("DC".to_owned()),
+            zipcode: Some("20500".to_owned()),
         },
     );
 }
@@ -158,7 +151,37 @@ pub struct AddressColumnSpec<Key: Default + Eq> {
     address_columns_by_prefix: HashMap<String, AddressColumnKeys<Key>>,
 }
 
+impl<Key: Default + Eq> AddressColumnSpec<Key> {
+    /// The number of prefixes we want to include in our output.
+    pub fn prefix_count(&self) -> usize {
+        self.address_columns_by_prefix.len()
+    }
+
+    /// The address prefixes we want to include in our output.
+    ///
+    /// This **MUST** return the prefixes in the same order every time or our
+    /// output will be corrupted.
+    pub fn prefixes(&self) -> Vec<&str> {
+        let mut prefixes = self
+            .address_columns_by_prefix
+            .keys()
+            .map(|k| &k[..])
+            .collect::<Vec<_>>();
+        // Do not remove this `sort`!
+        prefixes.sort();
+        prefixes
+    }
+}
+
 impl AddressColumnSpec<String> {
+    /// Load an `AddressColumnSpec` from a file.
+    pub fn from_path(path: &Path) -> Result<Self> {
+        let f = File::open(path)
+            .with_context(|_| format_err!("cannot open {}", path.display()))?;
+        Ok(serde_json::from_reader(f)
+            .with_context(|_| format_err!("error parsing {}", path.display()))?)
+    }
+
     /// Given an `AddressColumnSpec` using strings, and the header row of a CSV
     /// file, convert it into a `AddressColumnSpec<usize>` containing the column
     /// indices.

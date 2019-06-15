@@ -1,15 +1,46 @@
 //! Interface to SmartyStreets REST API.
 
-use failure::format_err;
+use failure::{format_err, ResultExt};
+use futures::{compat::Future01CompatExt, FutureExt};
+use hyper::rt::Stream;
+use reqwest::r#async::Client;
 use serde::{Deserialize, Serialize};
 use serde_json;
-use std::str::FromStr;
+use std::{
+    env,
+    future::Future,
+    pin::Pin,
+    str::{self, FromStr},
+};
+use url::Url;
 
 use crate::addresses::Address;
+use crate::unpack_vec::unpack_vec;
 use crate::{Error, Result};
 
+/// Credentials for authenticating with SmartyStreets.
+#[derive(Debug, Clone)]
+pub struct Credentials {
+    auth_id: String,
+    auth_token: String,
+}
+
+impl Credentials {
+    /// Create new SmartyStreets credentials from environment variables.
+    fn from_env() -> Result<Credentials> {
+        let auth_id = env::var("SMARTYSTREETS_AUTH_ID")
+            .context("could not read SMARTYSTREETS_AUTH_ID")?;
+        let auth_token = env::var("SMARTYSTREETS_AUTH_TOKEN")
+            .context("could not read SMARTYSTREETS_AUTH_TOKEN")?;
+        Ok(Credentials {
+            auth_id,
+            auth_token,
+        })
+    }
+}
+
 /// What match candidates should we output when geocoding?
-#[derive(Debug, Serialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MatchStrategy {
     /// Only match valid USPS addresses.
@@ -19,6 +50,12 @@ pub enum MatchStrategy {
     Range,
     /// Return a candidate for every address.
     Invalid,
+}
+
+impl Default for MatchStrategy {
+    fn default() -> Self {
+        MatchStrategy::Strict
+    }
 }
 
 impl FromStr for MatchStrategy {
@@ -38,10 +75,10 @@ impl FromStr for MatchStrategy {
 
 /// A SmartyStreets address request.
 #[derive(Debug, Serialize)]
-pub struct AddressRequest<'a> {
+pub struct AddressRequest {
     /// The address to geocode.
     #[serde(flatten)]
-    pub address: Address<'a>,
+    pub address: Address,
 
     /// What match strategy should we use?
     #[serde(rename = "match")]
@@ -49,8 +86,11 @@ pub struct AddressRequest<'a> {
 }
 
 /// A SmartyStreets address response.
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct AddressResponse {
+    /// The index of the corresponding `AddressRequest`.
+    input_index: usize,
+
     /// Fields returned by SmartyStreets. We could actually represent this as
     /// serveral large structs with known fields, and it would probably be
     /// faster, but this way requires less code for now.
@@ -61,10 +101,63 @@ pub struct AddressResponse {
 /// An interface to SmartyStreets.
 pub trait SmartyStreetsApi {
     /// Geocode street addresses using SmartyStreets.
-    fn street_addresses(&self, requests: &[AddressRequest]) -> Result<Vec<Option<AddressResponse>>>;
+    fn street_addresses(
+        &self,
+        requests: Vec<AddressRequest>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<Option<AddressResponse>>>>>>;
 }
 
 /// The real implementation of `SmartyStreetsApi`.
 pub struct SmartyStreets {
+    credentials: Credentials,
+}
 
+impl SmartyStreets {
+    /// Create a new SmartyStreets client.
+    fn new() -> Result<SmartyStreets> {
+        Ok(SmartyStreets {
+            credentials: Credentials::from_env()?,
+        })
+    }
+}
+
+impl SmartyStreetsApi for SmartyStreets {
+    fn street_addresses(
+        &self,
+        requests: Vec<AddressRequest>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<Option<AddressResponse>>>>>> {
+        street_addresses_impl(self.credentials.clone(), requests).boxed()
+    }
+}
+
+async fn street_addresses_impl(
+    credentials: Credentials,
+    requests: Vec<AddressRequest>,
+) -> Result<Vec<Option<AddressResponse>>> {
+    // Build our URL.
+    let mut url = Url::parse("https://api.smartystreets.com/street-address")?;
+    url.query_pairs_mut()
+        .append_pair("auth-id", &credentials.auth_id)
+        .append_pair("auth-token", &credentials.auth_token)
+        .finish();
+
+    // Make the geocoding request.
+    let client = Client::new();
+    let response = client
+        .post(url.as_str())
+        .json(&requests)
+        .send()
+        .compat()
+        .await?;
+    let status = response.status();
+    let body_data = response.into_body().concat2().compat().await?;
+    let body = str::from_utf8(&body_data)?;
+
+    // Check the request status.
+    if status.is_success() {
+        let resps: Vec<AddressResponse> = serde_json::from_str(body)?;
+        Ok(unpack_vec(resps, requests.len(), |resp| resp.input_index)?)
+    } else {
+        Err(format_err!("geocoding error: {}\n{}", status, body))
+    }
 }
