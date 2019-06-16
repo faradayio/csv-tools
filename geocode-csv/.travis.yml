@@ -26,6 +26,7 @@ before_deploy:
 deploy:
   - provider: releases
     api_key: $GITHUB_TOKEN
+      secure: xml5iUUHFkGuugQ7XDs09AkX6v24cvbZjf/dtP8EjVAfT0T63jZnPoiXFxUtqJ5WU4tzb7z0LgiF4kATP7rFHzxSZDbPjhdDKzDJqBXVMkfqmzA3y67cIv1TxV2slCENXCofDuRNhmx21iRRTgUIE+m7rrb5teG/XISUYR22441VyOg+Nx/ZZ+9r+V5seHU7wgskA3/xx3tItzGADG/2Vbvg1yHuU5NbkevtvcrWNOPp6XhEDrdrnflC/yGJODCkyOtRCHi54DWU0i96LrCY5qdggvlTsVk9lYKImBIehSUXSC7EMsGKn9qqYAfwJ5NhZ+h66LVqWkA5SdRpoaD1e1pwUI3RNvezJoYSJpQtCi4uhEhB6cw+ZQq3e8C06WLVga2T+mTdLfaEg0e6nrUAl25rlYrhO73+mjuh8FiUOwy/1N3OeI6wWhSDv0DWuRhDW33Tb7c0rLer7yzrqyEOcgEURYgEBOgW9WD2/cFSW3HGdTCAY+MrDub07Gz/13j0kfWGDzGIwMlG91es6HIlTdVx70FcocWs7F3H5Q4xZAQYg7SudwW1q4PBX27EZ4uk8Lm67SDxd1nWHyb6er4GXLg9r6P1224kdMd3okbPp4a5r91n1wxMOqC5CpHdXP+yPs2aY6cunTfLy0KPHfnl2Y5F6gvDwnDVA51zxLsuKF0=
     file_glob: true
     file: "streaming-geocode-${TRAVIS_TAG}-${TRAVIS_OS_NAME}.*"
     skip_cleanup: true
