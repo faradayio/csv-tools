@@ -1,5 +1,6 @@
 //! Geocoding support.
 
+use common_failures::prelude::*;
 use csv::{self, StringRecord};
 use failure::{format_err, ResultExt};
 use futures::{compat::Future01CompatExt, future, FutureExt, TryFutureExt};
@@ -90,12 +91,42 @@ pub async fn geocode_stdio(
         .boxed();
 
     // Wait for all three of our processes to finish.
-    let (read_result, write_result, geocode_result) =
-        future::join3(read_fut, write_fut, geocode_fut).await;
-    geocode_result.context("error geocoding")?;
-    write_result.context("error writing output")?;
-    read_result.context("error reading input")?;
-    Ok(())
+    let (read_result, geocode_result, write_result) =
+        future::join3(read_fut, geocode_fut, write_fut).await;
+
+    // Wrap any errors with context.
+    let read_result: Result<()> = read_result
+        .context("error reading input")
+        .map_err(|e| e.into());
+    let geocode_result: Result<()> = geocode_result
+        .context("error geocoding")
+        .map_err(|e| e.into());
+    let write_result: Result<()> = write_result
+        .context("error writing output")
+        .map_err(|e| e.into());
+
+    // Print if one of the processes fails, it will usually cause the other two
+    // to fail. We could try to figure out the "root" cause for the user, or we
+    // could just print out all the errors and let the user sort them out. :-(
+    let mut failed = false;
+    if let Err(err) = &read_result {
+        failed = true;
+        eprintln!("{}", err.display_causes_and_backtrace());
+    }
+    if let Err(err) = &geocode_result {
+        failed = true;
+        eprintln!("{}", err.display_causes_and_backtrace());
+    }
+    if let Err(err) = &write_result {
+        failed = true;
+        eprintln!("{}", err.display_causes_and_backtrace());
+    }
+
+    if failed {
+        Err(format_err!("geocoding stdio failed"))
+    } else {
+        Ok(())
+    }
 }
 
 /// Read a CSV file and write it as messages to `tx`.
