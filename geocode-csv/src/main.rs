@@ -27,7 +27,7 @@ type Result<T> = result::Result<T, Error>;
 
 /// Our command-line arguments.
 #[derive(Debug, StructOpt)]
-#[structopt(help = "geocode CSV files passed on standard input")]
+#[structopt(about = "geocode CSV files passed on standard input")]
 struct Opt {
     /// `strict` for valid postal addresses only, `range` for unknown addresses
     /// within a street's known range, and `invalid` to always generate some
