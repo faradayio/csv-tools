@@ -2,7 +2,7 @@
 
 use failure::{format_err, ResultExt};
 use futures::compat::Future01CompatExt;
-use hyper::{Body, Client, client::HttpConnector, Request, rt::Stream};
+use hyper::{client::HttpConnector, rt::Stream, Body, Client, Request};
 use hyper_tls::HttpsConnector;
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -120,7 +120,8 @@ impl SmartyStreets {
         &self,
         requests: Vec<AddressRequest>,
     ) -> Result<Vec<Option<AddressResponse>>> {
-        street_addresses_impl(self.credentials.clone(), self.client.clone(), requests).await
+        street_addresses_impl(self.credentials.clone(), self.client.clone(), requests)
+            .await
     }
 }
 
@@ -142,9 +143,7 @@ async fn street_addresses_impl(
         .uri(url.as_str())
         .header("Content-Type", "application/json; charset=utf-8")
         .body(Body::from(serde_json::to_string(&requests)?))?;
-    let res = client.request(req)
-        .compat()
-        .await?;
+    let res = client.request(req).compat().await?;
     let status = res.status();
     let body_data = res.into_body().concat2().compat().await?;
     let body = str::from_utf8(&body_data)?;

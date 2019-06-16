@@ -1,9 +1,7 @@
 //! Utilities for working with async tasks.
 
 use failure::{format_err, ResultExt};
-use futures::{
-    compat::{Future01CompatExt},
-};
+use futures::compat::Future01CompatExt;
 use std::thread;
 use tokio::{prelude::*, sync::mpsc};
 
