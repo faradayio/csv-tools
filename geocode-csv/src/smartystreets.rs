@@ -2,19 +2,23 @@
 
 use failure::{format_err, ResultExt};
 use futures::compat::Future01CompatExt;
-use hyper::rt::Stream;
-use reqwest::r#async::Client;
+use hyper::{Body, Client, client::HttpConnector, Request, rt::Stream};
+use hyper_tls::HttpsConnector;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::{
     env,
     str::{self, FromStr},
+    sync::Arc,
 };
 use url::Url;
 
 use crate::addresses::Address;
 use crate::unpack_vec::unpack_vec;
 use crate::{Error, Result};
+
+/// A `hyper` client shared between multiple workers.
+pub type SharedHyperClient = Arc<Client<HttpsConnector<HttpConnector>>>;
 
 /// Credentials for authenticating with SmartyStreets.
 #[derive(Debug, Clone)]
@@ -72,7 +76,7 @@ impl FromStr for MatchStrategy {
 }
 
 /// A SmartyStreets address request.
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct AddressRequest {
     /// The address to geocode.
     #[serde(flatten)]
@@ -99,13 +103,15 @@ pub struct AddressResponse {
 /// The real implementation of `SmartyStreetsApi`.
 pub struct SmartyStreets {
     credentials: Credentials,
+    client: SharedHyperClient,
 }
 
 impl SmartyStreets {
     /// Create a new SmartyStreets client.
-    pub fn new() -> Result<SmartyStreets> {
+    pub fn new(client: SharedHyperClient) -> Result<SmartyStreets> {
         Ok(SmartyStreets {
             credentials: Credentials::from_env()?,
+            client,
         })
     }
 
@@ -114,12 +120,13 @@ impl SmartyStreets {
         &self,
         requests: Vec<AddressRequest>,
     ) -> Result<Vec<Option<AddressResponse>>> {
-        street_addresses_impl(self.credentials.clone(), requests).await
+        street_addresses_impl(self.credentials.clone(), self.client.clone(), requests).await
     }
 }
 
 async fn street_addresses_impl(
     credentials: Credentials,
+    client: SharedHyperClient,
     requests: Vec<AddressRequest>,
 ) -> Result<Vec<Option<AddressResponse>>> {
     // Build our URL.
@@ -130,15 +137,16 @@ async fn street_addresses_impl(
         .finish();
 
     // Make the geocoding request.
-    let client = Client::new();
-    let response = client
-        .post(url.as_str())
-        .json(&requests)
-        .send()
+    let req = Request::builder()
+        .method("POST")
+        .uri(url.as_str())
+        .header("Content-Type", "application/json; charset=utf-8")
+        .body(Body::from(serde_json::to_string(&requests)?))?;
+    let res = client.request(req)
         .compat()
         .await?;
-    let status = response.status();
-    let body_data = response.into_body().concat2().compat().await?;
+    let status = res.status();
+    let body_data = res.into_body().concat2().compat().await?;
     let body = str::from_utf8(&body_data)?;
 
     // Check the request status.

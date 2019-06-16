@@ -4,8 +4,10 @@ use common_failures::prelude::*;
 use csv::{self, StringRecord};
 use failure::{format_err, ResultExt};
 use futures::{compat::Future01CompatExt, future, FutureExt, TryFutureExt};
+use hyper::Client;
+use hyper_tls::HttpsConnector;
 use log::{debug, error, trace};
-use std::{cmp::max, io, sync::Arc};
+use std::{cmp::max, io, sync::Arc, thread::sleep, time::Duration};
 use tokio::{
     prelude::*,
     sync::mpsc::{self, Receiver, Sender},
@@ -13,7 +15,9 @@ use tokio::{
 
 use crate::addresses::AddressColumnSpec;
 use crate::async_util::run_sync_fn_in_background;
-use crate::smartystreets::{AddressRequest, MatchStrategy, SmartyStreets};
+use crate::smartystreets::{
+    AddressRequest, MatchStrategy, SharedHyperClient, SmartyStreets,
+};
 use crate::structure::Structure;
 use crate::Result;
 
@@ -75,12 +79,24 @@ pub async fn geocode_stdio(
         write_csv_to_stdout(out_rx)
     });
 
+    // Create a shared `hyper::Client` with a connection pool, so that we can
+    // use keep-alive.
+    let client = Arc::new(
+        Client::builder()
+            .keep_alive(true)
+            .build(HttpsConnector::new(4)?),
+    );
+
     // Geocode each chunk that we see, with up to `CONCURRENCY` chunks being
     // geocoded at a time.
     let geocode_fut = in_rx
         .map_err(|e| e.into())
         // Turn input messages into futures that yield output messages.
-        .map(move |message| geocode_message(match_strategy, message).boxed().compat())
+        .map(move |message| {
+            geocode_message(client.clone(), match_strategy, message)
+                .boxed()
+                .compat()
+        })
         // Turn output message futures into output messages in parallel.
         .buffered(CONCURRENCY)
         .forward(out_tx)
@@ -176,7 +192,8 @@ fn read_csv_from_stdin(
                     shared: shared.clone(),
                     rows,
                 }))
-                .wait()?;
+                .wait()
+                .context("could not send rows to geocoder (perhaps it failed)")?;
             sent_chunk = true;
             rows = Vec::with_capacity(chunk_size);
         }
@@ -191,12 +208,16 @@ fn read_csv_from_stdin(
                 shared: shared.clone(),
                 rows,
             }))
-            .wait()?;
+            .wait()
+            .context("could not send rows to geocoder (perhaps it failed)")?;
     }
 
     // Confirm that we've seen the end of the stream.
     trace!("sending end-of-stream for input");
-    tx.send(Message::EndOfStream).wait()?;
+    tx.send(Message::EndOfStream)
+        .wait()
+        .context("could not send end-of-stream to geocoder (perhaps it failed)")?;
+
     debug!("done sending input");
     Ok(())
 }
@@ -236,7 +257,9 @@ fn write_csv_to_stdout(mut rx: Receiver<Message>) -> Result<()> {
             // shouldn't happen.
             Ok((None, _rx)) => {
                 error!("did not receive end-of-stream");
-                return Err(format_err!("did not receive end-of-stream"));
+                return Err(format_err!(
+                    "did not receive end-of-stream from geocoder (perhaps it failed)"
+                ));
             }
             // We couldn't read a result from the background thread, probably
             // because it panicked.
@@ -251,13 +274,16 @@ fn write_csv_to_stdout(mut rx: Receiver<Message>) -> Result<()> {
 
 /// Geocode a `Message`. This is just a wrapper around `geocode_chunk`.
 async fn geocode_message(
+    client: SharedHyperClient,
     match_strategy: MatchStrategy,
     message: Message,
 ) -> Result<Message> {
     match message {
         Message::Chunk(chunk) => {
             trace!("geocoding {} rows", chunk.rows.len());
-            Ok(Message::Chunk(geocode_chunk(match_strategy, chunk).await?))
+            Ok(Message::Chunk(
+                geocode_chunk(client, match_strategy, chunk).await?,
+            ))
         }
         Message::EndOfStream => {
             trace!("geocoding received end-of-stream");
@@ -268,6 +294,7 @@ async fn geocode_message(
 
 /// Geocode a `Chunk`.
 async fn geocode_chunk(
+    client: SharedHyperClient,
     match_strategy: MatchStrategy,
     mut chunk: Chunk,
 ) -> Result<Chunk> {
@@ -290,15 +317,33 @@ async fn geocode_chunk(
     let addresses_len = addresses.len();
 
     // Create a SmartyStreets client.
-    //
-    // TODO: Use a pool with keepalive.
-    let client = SmartyStreets::new()?;
+    let smartystreets = SmartyStreets::new(client)?;
 
     // Geocode our addresses.
     //
     // TODO: Retry on failure.
     trace!("geocoding {} addresses", addresses_len);
-    let geocoded = client.street_addresses(addresses).await?;
+    let mut failures: u8 = 0;
+    let geocoded = loop {
+        // TODO: The `clone` here is expensive. We might want to move the
+        // `retry` loop inside of `street_addresses`.
+        let result = smartystreets.street_addresses(addresses.clone()).await;
+        match result {
+            Err(ref err) if failures < 5 => {
+                failures += 1;
+                debug!("retrying smartystreets error: {}", err);
+                sleep(Duration::from_secs(2));
+            }
+            Err(err) => {
+                return Err(err)
+                    .context("smartystreets error")
+                    .map_err(|e| e.into());
+            }
+            Ok(geocoded) => {
+                break geocoded;
+            }
+        }
+    };
     trace!("geocoded {} addresses", addresses_len);
 
     // Add address information to our , output rows.

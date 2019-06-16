@@ -8,7 +8,7 @@ use std::{borrow::Cow, collections::HashMap, fs::File, path::Path};
 use crate::Result;
 
 /// An address record that we can pass to SmartyStreets.
-#[derive(Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct Address {
     /// Either the street, or the entire address as a string. This must always
     /// be present.
