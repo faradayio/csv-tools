@@ -1,5 +1,5 @@
 [package]
-name = "streaming-geocode"
+name = "geocode-csv"
 version = "0.1.0"
 authors = ["Eric Kidd <git@randomhacks.net>"]
 edition = "2018"
@@ -9,7 +9,6 @@ common_failures = "0.1.1"
 csv = "1.0.7"
 env_logger = "0.6.1"
 failure = "0.1.5"
-futures-cpupool = "0.1.8"
 futures-preview = { version = "0.3.0-alpha", features = ["compat"] }
 hyper = "0.12"
 hyper-tls = "0.3"
