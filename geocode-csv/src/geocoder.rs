@@ -1,8 +1,9 @@
 //! Geocoding support.
 
 use csv::{self, StringRecord};
-use failure::format_err;
-use futures::{compat::Stream01CompatExt, FutureExt, StreamExt, TryFutureExt};
+use failure::{format_err, ResultExt};
+use futures::{compat::Future01CompatExt, future, FutureExt, TryFutureExt};
+use log::{debug, error, trace};
 use std::{cmp::max, io, sync::Arc};
 use tokio::{
     prelude::*,
@@ -11,9 +12,9 @@ use tokio::{
 
 use crate::addresses::AddressColumnSpec;
 use crate::async_util::run_sync_fn_in_background;
-use crate::smartystreets::MatchStrategy;
+use crate::smartystreets::{AddressRequest, MatchStrategy, SmartyStreets};
 use crate::structure::Structure;
-use crate::{Error, Result};
+use crate::Result;
 
 /// The number of chunks to buffer on our internal channels.
 const CHANNEL_BUFFER: usize = 8;
@@ -26,8 +27,6 @@ const GEOCODE_SIZE: usize = 72;
 
 /// Data about the CSV file that we include with every chunk to be geocoded.
 struct Shared {
-    /// The header of the input CSV file.
-    in_headers: StringRecord,
     /// Which columns contain addresses that we need to geocode?
     spec: AddressColumnSpec<usize>,
     /// Which SmartyStreets outputs do we want to store in our output?
@@ -83,9 +82,20 @@ pub async fn geocode_stdio(
         .map(move |message| geocode_message(match_strategy, message).boxed().compat())
         // Turn output message futures into output messages in parallel.
         .buffered(CONCURRENCY)
-        .forward(out_tx);
+        .forward(out_tx)
+        .map(|_| ())
+        .compat()
+        // Convert from "complex type implementing future" to an abstract
+        // `Box<dyn Future<...>>` to avoid weird type errors in our callers.
+        .boxed();
 
-    unimplemented!()
+    // Wait for all three of our processes to finish.
+    let (read_result, write_result, geocode_result) =
+        future::join3(read_fut, write_fut, geocode_fut).await;
+    geocode_result.context("error geocoding")?;
+    write_result.context("error writing output")?;
+    read_result.context("error reading input")?;
+    Ok(())
 }
 
 /// Read a CSV file and write it as messages to `tx`.
@@ -98,6 +108,7 @@ fn read_csv_from_stdin(
     let stdin = io::stdin();
     let mut rdr = csv::Reader::from_reader(stdin.lock());
     let in_headers = rdr.headers()?.to_owned();
+    debug!("input headers: {:?}", in_headers);
 
     // Convert our column spec from using header names to header indices.
     let spec = spec.convert_to_indices_using_headers(&in_headers)?;
@@ -112,10 +123,10 @@ fn read_csv_from_stdin(
     for prefix in spec.prefixes() {
         structure.add_header_columns(prefix, &mut out_headers)?;
     }
+    debug!("output headers: {:?}", out_headers);
 
     // Build our shared CSV file metadata, and wrap it with a reference count.
     let shared = Arc::new(Shared {
-        in_headers,
         spec,
         structure,
         out_headers,
@@ -128,6 +139,7 @@ fn read_csv_from_stdin(
         let row = row?;
         rows.push(row);
         if rows.len() >= chunk_size {
+            trace!("sending {} input rows", rows.len());
             tx = tx
                 .send(Message::Chunk(Chunk {
                     shared: shared.clone(),
@@ -142,6 +154,7 @@ fn read_csv_from_stdin(
     // Send a final chunk if either (1) we never sent a chunk, or (2) we have
     // rows that haven't been sent yet.
     if !sent_chunk || !rows.is_empty() {
+        trace!("sending final {} input rows", rows.len());
         tx = tx
             .send(Message::Chunk(Chunk {
                 shared: shared.clone(),
@@ -151,7 +164,9 @@ fn read_csv_from_stdin(
     }
 
     // Confirm that we've seen the end of the stream.
+    trace!("sending end-of-stream for input");
     tx.send(Message::EndOfStream).wait()?;
+    debug!("done sending input");
     Ok(())
 }
 
@@ -170,6 +185,7 @@ fn write_csv_to_stdout(mut rx: Receiver<Message>) -> Result<()> {
                 rx = new_rx;
                 match message {
                     Message::Chunk(chunk) => {
+                        trace!("received {} output rows", chunk.rows.len());
                         if !headers_written {
                             wtr.write_record(&chunk.shared.out_headers)?;
                             headers_written = true;
@@ -179,6 +195,7 @@ fn write_csv_to_stdout(mut rx: Receiver<Message>) -> Result<()> {
                         }
                     }
                     Message::EndOfStream => {
+                        trace!("received end-of-stream for output");
                         assert!(headers_written);
                         end_of_stream_seen = true;
                     }
@@ -187,11 +204,13 @@ fn write_csv_to_stdout(mut rx: Receiver<Message>) -> Result<()> {
             // The background thread exitted without sending anything. This
             // shouldn't happen.
             Ok((None, _rx)) => {
+                error!("did not receive end-of-stream");
                 return Err(format_err!("did not receive end-of-stream"));
             }
             // We couldn't read a result from the background thread, probably
             // because it panicked.
             Err(_) => {
+                error!("background thread panicked");
                 return Err(format_err!("background thread panicked"));
             }
         }
@@ -206,22 +225,64 @@ async fn geocode_message(
 ) -> Result<Message> {
     match message {
         Message::Chunk(chunk) => {
+            trace!("geocoding {} rows", chunk.rows.len());
             Ok(Message::Chunk(geocode_chunk(match_strategy, chunk).await?))
         }
-        Message::EndOfStream => Ok(Message::EndOfStream),
+        Message::EndOfStream => {
+            trace!("geocoding received end-of-stream");
+            Ok(Message::EndOfStream)
+        }
     }
 }
 
 /// Geocode a `Chunk`.
-async fn geocode_chunk(match_strategy: MatchStrategy, chunk: Chunk) -> Result<Chunk> {
+async fn geocode_chunk(
+    match_strategy: MatchStrategy,
+    mut chunk: Chunk,
+) -> Result<Chunk> {
+    // Build a list of addresses to geocode.
     let prefixes = chunk.shared.spec.prefixes();
-    //let mut addresses = vec![];
-    for row in &chunk.rows {
-        for prefix in &prefixes {
-            //chunk.shared.spec.
-            //addresses.push()
-            unimplemented!()
+    let mut addresses = vec![];
+    for prefix in &prefixes {
+        let column_keys = chunk
+            .shared
+            .spec
+            .get(prefix)
+            .expect("should always have prefix");
+        for row in &chunk.rows {
+            addresses.push(AddressRequest {
+                address: column_keys.extract_address_from_record(row)?,
+                match_strategy,
+            });
         }
     }
-    unimplemented!()
+    let addresses_len = addresses.len();
+
+    // Create a SmartyStreets client.
+    //
+    // TODO: Use a pool with keepalive.
+    let client = SmartyStreets::new()?;
+
+    // Geocode our addresses.
+    //
+    // TODO: Retry on failure.
+    trace!("geocoding {} addresses", addresses_len);
+    let geocoded = client.street_addresses(addresses).await?;
+    trace!("geocoded {} addresses", addresses_len);
+
+    // Add address information to our , output rows.
+    for geocoded_for_prefix in geocoded.chunks(chunk.rows.len()) {
+        assert_eq!(geocoded_for_prefix.len(), chunk.rows.len());
+        for (response, row) in geocoded_for_prefix.iter().zip(&mut chunk.rows) {
+            if let Some(response) = response {
+                chunk
+                    .shared
+                    .structure
+                    .add_value_columns_to_row(&response.fields, row)?;
+            } else {
+                chunk.shared.structure.add_empty_columns_to_row(row)?;
+            }
+        }
+    }
+    Ok(chunk)
 }

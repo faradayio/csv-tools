@@ -64,7 +64,7 @@ impl Structure {
         })
     }
 
-    /// Extract fields from `data` and merge them into `Value`.
+    /// Extract fields from `data` and merge them into `row`.
     ///
     /// PERFORMANCE: This is probably slower than it should be in a hot loop.
     pub fn add_value_columns_to_row(
@@ -87,10 +87,11 @@ impl Structure {
 
             // Add the value to our row.
             let formatted = match focus {
+                Value::Bool(b) => Cow::Borrowed(if *b { "T" } else { "F" }),
                 Value::Null => Cow::Borrowed(""),
                 Value::Number(n) => Cow::Owned(format!("{}", n)),
                 Value::String(s) => Cow::Borrowed(&s[..]),
-                Value::Array(_) | Value::Bool(_) | Value::Object(_) => {
+                Value::Array(_) | Value::Object(_) => {
                     return Err(format_err!(
                         "unexpected value at {:?}: {:?}",
                         path,
@@ -99,6 +100,15 @@ impl Structure {
                 }
             };
             row.push_field(&formatted);
+            Ok(())
+        })
+    }
+
+    /// Add empty columns to the row. We call this when we couldn't geocode an
+    /// address.
+    pub fn add_empty_columns_to_row(&self, row: &mut StringRecord) -> Result<()> {
+        self.traverse(|_path| {
+            row.push_field("");
             Ok(())
         })
     }
@@ -153,7 +163,7 @@ fn add_header_columns() {
     let structure = Structure::complete().unwrap();
     let mut header = StringRecord::from_iter(&["existing"]);
     structure.add_header_columns("x", &mut header).unwrap();
-    let mut expected = StringRecord::from_iter(
+    let expected = StringRecord::from_iter(
         &[
             "existing",
             "x_addressee",
@@ -229,7 +239,7 @@ fn add_value_columns() {
 
     let mut row = StringRecord::from_iter(&["existing"]);
     structure.add_value_columns_to_row(&data, &mut row).unwrap();
-    let mut expected = StringRecord::from_iter(
+    let expected = StringRecord::from_iter(
         &[
             "existing",
             "ACME, Inc.",

@@ -171,6 +171,11 @@ impl<Key: Default + Eq> AddressColumnSpec<Key> {
         prefixes.sort();
         prefixes
     }
+
+    /// Look up an `AddressColumnKeys` by prefix.
+    pub fn get(&self, prefix: &str) -> Option<&AddressColumnKeys<Key>> {
+        self.address_columns_by_prefix.get(prefix)
+    }
 }
 
 impl AddressColumnSpec<String> {

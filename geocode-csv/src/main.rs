@@ -2,20 +2,14 @@
 // https://github.com/daboross/futures-example-2019/
 
 #![feature(async_await)]
+#![recursion_limit = "128"]
 
 use common_failures::quick_main;
 use env_logger;
-use failure::{format_err, Error};
-use futures::{
-    compat::{Future01CompatExt, Stream01CompatExt},
-    future, FutureExt, TryFutureExt, TryStreamExt,
-};
-use hyper::rt::Stream;
-use reqwest::r#async::Client;
-use serde_json::json;
-use std::{env, path::PathBuf, result, str};
+use failure::Error;
+use futures::{FutureExt, TryFutureExt};
+use std::{path::PathBuf, result};
 use structopt::StructOpt;
-use url::Url;
 
 mod addresses;
 mod async_util;
@@ -68,40 +62,3 @@ fn run() -> Result<()> {
     runtime.block_on(geocode_fut.boxed().compat())?;
     Ok(())
 }
-
-/*
-/// Example call to SmartyStreets.
-async fn geocode_example() -> Result<()> {
-    // Build our URL.
-    let mut url = Url::parse("https://api.smartystreets.com/street-address")?;
-    url.query_pairs_mut()
-        .append_pair("auth-id", &env::var("SMARTYSTREETS_AUTH_ID")?)
-        .append_pair("auth-token", &env::var("SMARTYSTREETS_AUTH_TOKEN")?)
-        .finish();
-
-    // Make the geocoding request.
-    let client = Client::new();
-    let response = client
-        .post(url.as_str())
-        .json(&json!([{
-            "street": "275 Apple Tree Road",
-            "city": "East Thetford",
-            "state": "VT",
-            "zip": "05043",
-        }]))
-        .send()
-        .compat()
-        .await?;
-    let status = response.status();
-    let body = response.into_body().concat2().compat().await?;
-    let s = str::from_utf8(&body)?;
-
-    // Check the request status.
-    if status.is_success() {
-        println!("response: {}", s);
-        Ok(())
-    } else {
-        Err(format_err!("geocoding error: {}\n{}", status, s))
-    }
-}
-*/

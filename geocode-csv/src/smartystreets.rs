@@ -1,15 +1,13 @@
 //! Interface to SmartyStreets REST API.
 
 use failure::{format_err, ResultExt};
-use futures::{compat::Future01CompatExt, FutureExt};
+use futures::compat::Future01CompatExt;
 use hyper::rt::Stream;
 use reqwest::r#async::Client;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::{
     env,
-    future::Future,
-    pin::Pin,
     str::{self, FromStr},
 };
 use url::Url;
@@ -89,22 +87,13 @@ pub struct AddressRequest {
 #[derive(Clone, Debug, Deserialize)]
 pub struct AddressResponse {
     /// The index of the corresponding `AddressRequest`.
-    input_index: usize,
+    pub input_index: usize,
 
     /// Fields returned by SmartyStreets. We could actually represent this as
     /// serveral large structs with known fields, and it would probably be
     /// faster, but this way requires less code for now.
     #[serde(flatten)]
-    fields: serde_json::Value,
-}
-
-/// An interface to SmartyStreets.
-pub trait SmartyStreetsApi {
-    /// Geocode street addresses using SmartyStreets.
-    fn street_addresses(
-        &self,
-        requests: Vec<AddressRequest>,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<Option<AddressResponse>>>>>>;
+    pub fields: serde_json::Value,
 }
 
 /// The real implementation of `SmartyStreetsApi`.
@@ -114,19 +103,18 @@ pub struct SmartyStreets {
 
 impl SmartyStreets {
     /// Create a new SmartyStreets client.
-    fn new() -> Result<SmartyStreets> {
+    pub fn new() -> Result<SmartyStreets> {
         Ok(SmartyStreets {
             credentials: Credentials::from_env()?,
         })
     }
-}
 
-impl SmartyStreetsApi for SmartyStreets {
-    fn street_addresses(
+    /// Geocode addresses using SmartyStreets.
+    pub async fn street_addresses(
         &self,
         requests: Vec<AddressRequest>,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<Option<AddressResponse>>>>>> {
-        street_addresses_impl(self.credentials.clone(), requests).boxed()
+    ) -> Result<Vec<Option<AddressResponse>>> {
+        street_addresses_impl(self.credentials.clone(), requests).await
     }
 }
 
