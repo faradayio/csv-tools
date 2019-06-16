@@ -42,7 +42,7 @@ impl Structure {
         // Update our column count.
         let mut count = 0;
         structure.traverse(|_path| {
-            *(&mut count) += 1;
+            count += 1;
             Ok(())
         })?;
         structure.column_count = count;

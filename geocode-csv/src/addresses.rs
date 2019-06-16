@@ -278,7 +278,7 @@ impl ConvertToIndices for String {
     ) -> Result<Self::Output> {
         header_columns
             .get(&self[..])
-            .map(|idx| *idx)
+            .copied()
             .ok_or_else(|| format_err!("could not find column `{}` in header", self))
     }
 }
