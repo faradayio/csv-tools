@@ -1,7 +1,6 @@
 // Async HTTP boilerplate based on
 // https://github.com/daboross/futures-example-2019/
 
-#![feature(async_await)]
 #![recursion_limit = "128"]
 
 use common_failures::quick_main;
