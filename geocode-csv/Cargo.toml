@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 common_failures = "0.1.1"
 csv = "1.0.7"
-env_logger = "0.6.1"
+env_logger = "0.7.1"
 failure = "0.1.5"
 futures-preview = { version = "0.3.0-alpha", features = ["compat"] }
 hyper = "0.12"
@@ -17,6 +17,6 @@ serde = { version = "1.0.92", features = ["derive"] }
 # IMPORTANT: We require `preserve_order` to correctly handle "structure" JSON'
 # specifications in a way that puts the right data in the right output columns.
 serde_json = { version = "1.0.39", features = ["preserve_order"] }
-structopt = "0.2.16"
+structopt = "0.3.4"
 tokio = "0.1"
 url = "1.7.2"
