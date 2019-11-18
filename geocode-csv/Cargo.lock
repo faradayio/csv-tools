@@ -359,7 +359,7 @@ dependencies = [
 
 [[package]]
 name = "geocode-csv"
-version = "0.1.2"
+version = "0.2.0-alpha.1"
 dependencies = [
  "common_failures 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "csv 1.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
