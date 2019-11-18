@@ -3,8 +3,14 @@
 use csv::StringRecord;
 use failure::{format_err, ResultExt};
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, collections::HashMap, fs::File, path::Path};
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+    fs::File,
+    path::Path,
+};
 
+use crate::structure::Structure;
 use crate::Result;
 
 /// An address record that we can pass to SmartyStreets.
@@ -176,6 +182,61 @@ impl<Key: Default + Eq> AddressColumnSpec<Key> {
     pub fn get(&self, prefix: &str) -> Option<&AddressColumnKeys<Key>> {
         self.address_columns_by_prefix.get(prefix)
     }
+
+    /// What column indices should we remove from the input records in order
+    /// to prevent duplicate columns?
+    ///
+    /// These indices will always be returned in order.
+    pub fn column_indices_to_remove(
+        &self,
+        structure: &Structure,
+        header: &StringRecord,
+    ) -> Result<Vec<usize>> {
+        // Get all our column names for all prefixes, and insert them into a
+        // hash table.
+        let mut output_column_names = HashSet::new();
+        for prefix in self.prefixes() {
+            for name in structure.output_column_names(prefix)? {
+                if !output_column_names.insert(name.clone()) {
+                    return Err(format_err!("duplicate column name {:?}", name));
+                }
+            }
+        }
+
+        // Decide which columns of `header` need to be removed.
+        let mut indices_to_remove = vec![];
+        for (i, col) in header.iter().enumerate() {
+            if output_column_names.contains(col) {
+                indices_to_remove.push(i);
+            }
+        }
+        Ok(indices_to_remove)
+    }
+}
+
+#[test]
+fn find_columns_to_remove() {
+    use std::iter::FromIterator;
+
+    let address_column_spec_json = r#"{
+        "home": {
+            "house_number_and_street": ["home_number", "home_street"],
+            "city": "home_city",
+            "state": "home_state",
+            "postcode": "home_zip"
+        },
+        "work": {
+            "address": "work_address"
+        }
+    }"#;
+    let spec: AddressColumnSpec<String> =
+        serde_json::from_str(address_column_spec_json).unwrap();
+
+    let structure = Structure::complete().unwrap();
+    let header =
+        StringRecord::from_iter(&["existing", "home_addressee", "work_addressee"]);
+    let indices = spec.column_indices_to_remove(&structure, &header).unwrap();
+    assert_eq!(indices, vec![1, 2]);
 }
 
 impl AddressColumnSpec<String> {

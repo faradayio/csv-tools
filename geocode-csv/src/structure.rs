@@ -49,6 +49,27 @@ impl Structure {
         Ok(structure)
     }
 
+    /// Given a column `prefix` and the path to a colum in our
+    /// [`structure::Structure`], return the column name we should use. This
+    /// will panic if `path` is empty, because that should be impossible.
+    fn column_name(&self, prefix: &str, path: &[&str]) -> String {
+        let last = path
+            .last()
+            .expect("should always have at least one path element");
+        format!("{}_{}", prefix, last)
+    }
+
+    /// Return all the columns that this structure will add to a CSV file.
+    pub fn output_column_names(&self, prefix: &str) -> Result<Vec<String>> {
+        let mut columns = vec![];
+        self.traverse(|path| {
+            let name = self.column_name(prefix, path);
+            columns.push(name);
+            Ok(())
+        })?;
+        Ok(columns)
+    }
+
     /// Add the column names specified in this `Structure` to a CSV header row.
     pub fn add_header_columns(
         &self,
@@ -56,10 +77,7 @@ impl Structure {
         header: &mut StringRecord,
     ) -> Result<()> {
         self.traverse(|path| {
-            let last = path
-                .last()
-                .expect("should always have at least one path element");
-            header.push_field(&format!("{}_{}", prefix, last));
+            header.push_field(&self.column_name(prefix, path));
             Ok(())
         })
     }

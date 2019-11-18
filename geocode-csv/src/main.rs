@@ -34,6 +34,11 @@ struct Opt {
     #[structopt(long = "match", default_value = "strict")]
     match_strategy: MatchStrategy,
 
+    /// Replace any existing columns with the same name as our geocoding
+    /// columns.
+    #[structopt(long = "replace")]
+    replace: bool,
+
     /// A JSON file describing what columns to geocode.
     #[structopt(long = "spec")]
     spec_path: PathBuf,
@@ -53,7 +58,7 @@ fn run() -> Result<()> {
     let structure = Structure::complete()?;
 
     // Call our geocoder asynchronously.
-    let geocode_fut = geocode_stdio(spec, opt.match_strategy, structure);
+    let geocode_fut = geocode_stdio(spec, opt.match_strategy, opt.replace, structure);
 
     // Pass our future to our async runtime.
     let mut runtime =
