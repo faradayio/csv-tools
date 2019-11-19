@@ -183,15 +183,15 @@ impl<Key: Default + Eq> AddressColumnSpec<Key> {
         self.address_columns_by_prefix.get(prefix)
     }
 
-    /// What column indices should we remove from the input records in order
+    /// What column should we remove from the input records in order
     /// to prevent duplicate columns?
     ///
-    /// These indices will always be returned in order.
-    pub fn column_indices_to_remove(
+    /// Returns the name and index of each column to remove, in order.
+    pub fn duplicate_columns<'header>(
         &self,
         structure: &Structure,
-        header: &StringRecord,
-    ) -> Result<Vec<usize>> {
+        header: &'header StringRecord,
+    ) -> Result<Vec<(&'header str, usize)>> {
         // Get all our column names for all prefixes, and insert them into a
         // hash table.
         let mut output_column_names = HashSet::new();
@@ -204,13 +204,13 @@ impl<Key: Default + Eq> AddressColumnSpec<Key> {
         }
 
         // Decide which columns of `header` need to be removed.
-        let mut indices_to_remove = vec![];
+        let mut duplicate_columns = vec![];
         for (i, col) in header.iter().enumerate() {
             if output_column_names.contains(col) {
-                indices_to_remove.push(i);
+                duplicate_columns.push((col, i));
             }
         }
-        Ok(indices_to_remove)
+        Ok(duplicate_columns)
     }
 }
 
@@ -235,8 +235,8 @@ fn find_columns_to_remove() {
     let structure = Structure::complete().unwrap();
     let header =
         StringRecord::from_iter(&["existing", "home_addressee", "work_addressee"]);
-    let indices = spec.column_indices_to_remove(&structure, &header).unwrap();
-    assert_eq!(indices, vec![1, 2]);
+    let indices = spec.duplicate_columns(&structure, &header).unwrap();
+    assert_eq!(indices, vec![("home_addressee", 1), ("work_addressee", 2)]);
 }
 
 impl AddressColumnSpec<String> {

@@ -10,6 +10,7 @@ use log::{debug, error, trace, warn};
 use std::{
     cmp::max, io, iter::FromIterator, sync::Arc, thread::sleep, time::Duration,
 };
+use strum_macros::EnumString;
 use tokio::{
     prelude::*,
     sync::mpsc::{self, Receiver, Sender},
@@ -31,6 +32,19 @@ const CONCURRENCY: usize = 48;
 
 /// The number of addresses to pass to SmartyStreets at one time.
 const GEOCODE_SIZE: usize = 72;
+
+/// What should we do if a geocoding output column has the same as a column in
+/// the input?
+#[derive(Debug, Clone, Copy, EnumString, Eq, PartialEq)]
+#[strum(serialize_all = "snake_case")]
+pub enum OnDuplicateColumns {
+    /// Fail with an error.
+    Error,
+    /// Replace existing columns with the same name.
+    Replace,
+    /// Leave the old columns in place and append the new ones.
+    Append,
+}
 
 /// Data about the CSV file that we include with every chunk to be geocoded.
 struct Shared {
@@ -65,7 +79,7 @@ enum Message {
 pub async fn geocode_stdio(
     spec: AddressColumnSpec<String>,
     match_strategy: MatchStrategy,
-    replace_existing_columns: bool,
+    on_duplicate_columns: OnDuplicateColumns,
     structure: Structure,
 ) -> Result<()> {
     // Set up bounded channels for communication between the sync and async
@@ -76,7 +90,7 @@ pub async fn geocode_stdio(
     // Hook up our inputs and outputs, which are synchronous functions running
     // in their own threads.
     let read_fut = run_sync_fn_in_background("read CSV".to_owned(), move || {
-        read_csv_from_stdin(spec, structure, replace_existing_columns, in_tx)
+        read_csv_from_stdin(spec, structure, on_duplicate_columns, in_tx)
     });
     let write_fut = run_sync_fn_in_background("write CSV".to_owned(), move || {
         write_csv_to_stdout(out_rx)
@@ -152,7 +166,7 @@ pub async fn geocode_stdio(
 fn read_csv_from_stdin(
     spec: AddressColumnSpec<String>,
     structure: Structure,
-    replace_existing_columns: bool,
+    on_duplicate_columns: OnDuplicateColumns,
     mut tx: Sender<Message>,
 ) -> Result<()> {
     // Open up our CSV file and get the headers.
@@ -161,47 +175,56 @@ fn read_csv_from_stdin(
     let mut in_headers = rdr.headers()?.to_owned();
     debug!("input headers: {:?}", in_headers);
 
-    // Look for duplicate input columns, and decide what to do.
-    let column_indices_to_remove =
-        spec.column_indices_to_remove(&structure, &in_headers)?;
-    let remove_column_flags = if column_indices_to_remove.is_empty() {
-        // No columns to remove!
-        None
-    } else {
-        // We have to remove columns, so make a human-readable list...
-        let mut removed_names = vec![];
-        for i in &column_indices_to_remove {
-            removed_names.push(&in_headers[*i]);
-        }
-        let removed_names = removed_names.join(" ");
-
-        // And decide whether we're actually allowed to remove them or not.
-        if replace_existing_columns {
-            warn!("removing input columns: {}", removed_names);
-
-            // Build the vector of bools specifying whether columns should
-            // stay or go.
-            let mut flags = vec![false; in_headers.len()];
-            for i in column_indices_to_remove {
-                flags[i] = true;
-            }
-            Some(flags)
-        } else {
-            return Err(format_err!(
-                "input columns would conflict with geocoding columns: {}",
-                removed_names,
-            ));
-        }
+    // Figure out if we have any duplicate columns.
+    let (duplicate_column_indices, duplicate_column_names) = {
+        let duplicate_columns = spec.duplicate_columns(&structure, &in_headers)?;
+        let indices = duplicate_columns
+            .iter()
+            .map(|name_idx| name_idx.1)
+            .collect::<Vec<_>>();
+        let names = duplicate_columns
+            .iter()
+            .map(|name_idx| name_idx.0)
+            .collect::<Vec<_>>()
+            .join(", ");
+        (indices, names)
     };
 
+    // If we do have duplicate columns, figure out what to do about it.
+    let mut should_remove_columns = false;
+    let mut remove_column_flags = vec![false; in_headers.len()];
+    if !duplicate_column_indices.is_empty() {
+        match on_duplicate_columns {
+            OnDuplicateColumns::Error => {
+                return Err(format_err!(
+                    "input columns would conflict with geocoding columns: {}",
+                    duplicate_column_names,
+                ));
+            }
+            OnDuplicateColumns::Replace => {
+                warn!("replacing input columns: {}", duplicate_column_names);
+                should_remove_columns = true;
+                for i in duplicate_column_indices.iter().cloned() {
+                    remove_column_flags[i] = true;
+                }
+            }
+            OnDuplicateColumns::Append => {
+                warn!(
+                    "output contains duplicate columns: {}",
+                    duplicate_column_names,
+                );
+            }
+        }
+    }
+
     // Remove any duplicate columns from our input headers.
-    if let Some(remove_column_flags) = &remove_column_flags {
+    if should_remove_columns {
         in_headers = remove_columns(&in_headers, &remove_column_flags);
     }
 
     // Convert our column spec from using header names to header indices.
     //
-    // This needs to use "post-removal" indices!
+    // This needs to happen _after_ `remove_columns` on our headers!
     let spec = spec.convert_to_indices_using_headers(&in_headers)?;
 
     // Decide how big to make our chunks. We want to geocode no more
@@ -228,9 +251,9 @@ fn read_csv_from_stdin(
     let mut rows = Vec::with_capacity(chunk_size);
     for row in rdr.records() {
         let mut row = row?;
-        if let Some(remove_column_flags) = &remove_column_flags {
+        if should_remove_columns {
             // Strip out any duplicate columns.
-            row = remove_columns(&row, remove_column_flags);
+            row = remove_columns(&row, &remove_column_flags);
         }
         rows.push(row);
         if rows.len() >= chunk_size {
@@ -268,6 +291,20 @@ fn read_csv_from_stdin(
 
     debug!("done sending input");
     Ok(())
+}
+
+/// Remove columns from `row` if they're set to true in `remove_column_flags`.
+fn remove_columns(row: &StringRecord, remove_column_flags: &[bool]) -> StringRecord {
+    debug_assert_eq!(row.len(), remove_column_flags.len());
+    StringRecord::from_iter(row.iter().zip(remove_column_flags).filter_map(
+        |(value, &remove)| {
+            if remove {
+                None
+            } else {
+                Some(value.to_owned())
+            }
+        },
+    ))
 }
 
 /// Receive chunks of a CSV file from `rx` and write them to standard output.
@@ -409,16 +446,4 @@ async fn geocode_chunk(
         }
     }
     Ok(chunk)
-}
-
-fn remove_columns(row: &StringRecord, remove_column_flags: &[bool]) -> StringRecord {
-    StringRecord::from_iter(row.iter().zip(remove_column_flags).filter_map(
-        |(value, &remove)| {
-            if remove {
-                None
-            } else {
-                Some(value.to_owned())
-            }
-        },
-    ))
 }

@@ -18,7 +18,7 @@ mod structure;
 mod unpack_vec;
 
 use addresses::AddressColumnSpec;
-use geocoder::geocode_stdio;
+use geocoder::{geocode_stdio, OnDuplicateColumns};
 use smartystreets::MatchStrategy;
 use structure::Structure;
 
@@ -34,10 +34,10 @@ struct Opt {
     #[structopt(long = "match", default_value = "strict")]
     match_strategy: MatchStrategy,
 
-    /// Replace any existing columns with the same name as our geocoding
-    /// columns.
-    #[structopt(long = "replace")]
-    replace: bool,
+    /// What should we if geocoding output columns have the same names as input
+    /// columns? [error, replace, append]
+    #[structopt(long = "duplicate-columns", default_value = "error")]
+    on_duplicate_columns: OnDuplicateColumns,
 
     /// A JSON file describing what columns to geocode.
     #[structopt(long = "spec")]
@@ -58,7 +58,12 @@ fn run() -> Result<()> {
     let structure = Structure::complete()?;
 
     // Call our geocoder asynchronously.
-    let geocode_fut = geocode_stdio(spec, opt.match_strategy, opt.replace, structure);
+    let geocode_fut = geocode_stdio(
+        spec,
+        opt.match_strategy,
+        opt.on_duplicate_columns,
+        structure,
+    );
 
     // Pass our future to our async runtime.
     let mut runtime =
