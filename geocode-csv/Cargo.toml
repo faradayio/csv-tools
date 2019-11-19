@@ -1,8 +1,18 @@
 [package]
 name = "geocode-csv"
-version = "0.2.0-alpha.1"
+version = "0.2.0"
 authors = ["Eric Kidd <git@randomhacks.net>"]
 edition = "2018"
+
+description = "Unofficial CLI tool to bulk geocode CSV data using the SmartyStreets API"
+license = "Apache-2.0 OR MIT"
+readme = "README.md"
+repository = "https://github.com/faradayio/geocode-csv"
+documentation = "https://github.com/faradayio/geocode-csv"
+
+
+[dev-dependencies]
+cli_test_dir = "0.1.7"
 
 [dependencies]
 common_failures = "0.1.1"
@@ -18,5 +28,7 @@ serde = { version = "1.0.92", features = ["derive"] }
 # specifications in a way that puts the right data in the right output columns.
 serde_json = { version = "1.0.39", features = ["preserve_order"] }
 structopt = "0.3.4"
+strum = "0.16.0"
+strum_macros = "0.16.0"
 tokio = "0.1"
 url = "1.7.2"
