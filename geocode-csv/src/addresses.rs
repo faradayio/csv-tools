@@ -67,7 +67,7 @@ impl ColumnKeyOrKeys<usize> {
 pub struct AddressColumnKeys<K: Default + Eq> {
     /// The name of street column or columns. May also be specified as
     /// "house_number_and_street" or "address".
-    #[serde(alias = "house_number_and_street", alias = "address")]
+    #[serde(alias = "house_number_and_street", alias = "address", alias = "glob")]
     pub street: ColumnKeyOrKeys<K>,
     /// The city column, if any.
     #[serde(default)]
