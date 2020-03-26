@@ -28,7 +28,7 @@ serde = { version = "1.0.92", features = ["derive"] }
 # specifications in a way that puts the right data in the right output columns.
 serde_json = { version = "1.0.39", features = ["preserve_order"] }
 structopt = "0.3.4"
-strum = "0.16.0"
-strum_macros = "0.16.0"
+strum = "0.18.0"
+strum_macros = "0.18.0"
 tokio = "0.1"
-url = "1.7.2"
+url = "2.1.1"
