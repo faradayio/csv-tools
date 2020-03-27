@@ -7,4 +7,4 @@ FROM ekidd/rust-musl-builder:stable-openssl11
 ADD . ./
 RUN sudo chown -R rust:rust .
 
-CMD cargo build --release
+CMD cargo deny check && cargo build --release
