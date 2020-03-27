@@ -3,7 +3,7 @@
 use common_failures::prelude::*;
 use csv::{self, StringRecord};
 use failure::{format_err, ResultExt};
-use futures::{compat::Future01CompatExt, future, FutureExt, TryFutureExt};
+use futures::{executor::block_on, future, FutureExt, StreamExt};
 use hyper::Client;
 use hyper_tls::HttpsConnector;
 use log::{debug, error, trace, warn};
@@ -11,10 +11,7 @@ use std::{
     cmp::max, io, iter::FromIterator, sync::Arc, thread::sleep, time::Duration,
 };
 use strum_macros::EnumString;
-use tokio::{
-    prelude::*,
-    sync::mpsc::{self, Receiver, Sender},
-};
+use tokio::sync::mpsc::{self, Receiver, Sender};
 
 use crate::addresses::AddressColumnSpec;
 use crate::async_util::run_sync_fn_in_background;
@@ -85,7 +82,7 @@ pub async fn geocode_stdio(
     // Set up bounded channels for communication between the sync and async
     // worlds.
     let (in_tx, in_rx) = mpsc::channel::<Message>(CHANNEL_BUFFER);
-    let (out_tx, out_rx) = mpsc::channel::<Message>(CHANNEL_BUFFER);
+    let (mut out_tx, out_rx) = mpsc::channel::<Message>(CHANNEL_BUFFER);
 
     // Hook up our inputs and outputs, which are synchronous functions running
     // in their own threads.
@@ -100,28 +97,32 @@ pub async fn geocode_stdio(
     // use keep-alive.
     let client = Arc::new(
         Client::builder()
-            .keep_alive(true)
-            .build(HttpsConnector::new(4)?),
+            .pool_max_idle_per_host(CONCURRENCY)
+            .build(HttpsConnector::new()),
     );
 
     // Geocode each chunk that we see, with up to `CONCURRENCY` chunks being
     // geocoded at a time.
-    let geocode_fut = in_rx
-        .map_err(|e| e.into())
-        // Turn input messages into futures that yield output messages.
-        .map(move |message| {
-            geocode_message(client.clone(), match_strategy, message)
-                .boxed()
-                .compat()
-        })
-        // Turn output message futures into output messages in parallel.
-        .buffered(CONCURRENCY)
-        .forward(out_tx)
-        .map(|_| ())
-        .compat()
-        // Convert from "complex type implementing future" to an abstract
-        // `Box<dyn Future<...>>` to avoid weird type errors in our callers.
-        .boxed();
+    let geocode_fut = async move {
+        let mut stream = in_rx
+            // Turn input messages into futures that yield output messages.
+            .map(move |message| {
+                geocode_message(client.clone(), match_strategy, message).boxed()
+            })
+            // Turn output message futures into output messages in parallel.
+            .buffered(CONCURRENCY);
+
+        // Forward our results to our output.
+        while let Some(result) = stream.next().await {
+            out_tx
+                .send(result?)
+                .await
+                .map_err(|_| format_err!("could not send message to output thread"))?;
+        }
+
+        Ok::<_, Error>(())
+    }
+    .boxed();
 
     // Wait for all three of our processes to finish.
     let (read_result, geocode_result, write_result) =
@@ -258,13 +259,13 @@ fn read_csv_from_stdin(
         rows.push(row);
         if rows.len() >= chunk_size {
             trace!("sending {} input rows", rows.len());
-            tx = tx
-                .send(Message::Chunk(Chunk {
-                    shared: shared.clone(),
-                    rows,
-                }))
-                .wait()
-                .context("could not send rows to geocoder (perhaps it failed)")?;
+            block_on(tx.send(Message::Chunk(Chunk {
+                shared: shared.clone(),
+                rows,
+            })))
+            .map_err(|_| {
+                format_err!("could not send rows to geocoder (perhaps it failed)")
+            })?;
             sent_chunk = true;
             rows = Vec::with_capacity(chunk_size);
         }
@@ -274,20 +275,20 @@ fn read_csv_from_stdin(
     // rows that haven't been sent yet.
     if !sent_chunk || !rows.is_empty() {
         trace!("sending final {} input rows", rows.len());
-        tx = tx
-            .send(Message::Chunk(Chunk {
-                shared: shared.clone(),
-                rows,
-            }))
-            .wait()
-            .context("could not send rows to geocoder (perhaps it failed)")?;
+        block_on(tx.send(Message::Chunk(Chunk {
+            shared: shared.clone(),
+            rows,
+        })))
+        .map_err(|_| {
+            format_err!("could not send rows to geocoder (perhaps it failed)")
+        })?;
     }
 
     // Confirm that we've seen the end of the stream.
     trace!("sending end-of-stream for input");
-    tx.send(Message::EndOfStream)
-        .wait()
-        .context("could not send end-of-stream to geocoder (perhaps it failed)")?;
+    block_on(tx.send(Message::EndOfStream)).map_err(|_| {
+        format_err!("could not send end-of-stream to geocoder (perhaps it failed)")
+    })?;
 
     debug!("done sending input");
     Ok(())
@@ -314,45 +315,33 @@ fn write_csv_to_stdout(mut rx: Receiver<Message>) -> Result<()> {
 
     let mut headers_written = false;
     let mut end_of_stream_seen = false;
-    while !end_of_stream_seen {
-        let rx_result = rx.into_future().wait();
-        match rx_result {
-            // We received a value on our stream.
-            Ok((Some(message), new_rx)) => {
-                rx = new_rx;
-                match message {
-                    Message::Chunk(chunk) => {
-                        trace!("received {} output rows", chunk.rows.len());
-                        if !headers_written {
-                            wtr.write_record(&chunk.shared.out_headers)?;
-                            headers_written = true;
-                        }
-                        for row in chunk.rows {
-                            wtr.write_record(&row)?;
-                        }
-                    }
-                    Message::EndOfStream => {
-                        trace!("received end-of-stream for output");
-                        assert!(headers_written);
-                        end_of_stream_seen = true;
-                    }
+    while let Some(message) = block_on(rx.next()) {
+        match message {
+            Message::Chunk(chunk) => {
+                trace!("received {} output rows", chunk.rows.len());
+                if !headers_written {
+                    wtr.write_record(&chunk.shared.out_headers)?;
+                    headers_written = true;
+                }
+                for row in chunk.rows {
+                    wtr.write_record(&row)?;
                 }
             }
-            // The background thread exitted without sending anything. This
-            // shouldn't happen.
-            Ok((None, _rx)) => {
-                error!("did not receive end-of-stream");
-                return Err(format_err!(
-                    "did not receive end-of-stream from geocoder (perhaps it failed)"
-                ));
-            }
-            // We couldn't read a result from the background thread, probably
-            // because it panicked.
-            Err(_) => {
-                error!("background thread panicked");
-                return Err(format_err!("background thread panicked"));
+            Message::EndOfStream => {
+                trace!("received end-of-stream for output");
+                assert!(headers_written);
+                end_of_stream_seen = true;
+                break;
             }
         }
+    }
+    if !end_of_stream_seen {
+        // The background thread exitted without sending anything. This
+        // shouldn't happen.
+        error!("did not receive end-of-stream");
+        return Err(format_err!(
+            "did not receive end-of-stream from geocoder (perhaps it failed)"
+        ));
     }
     Ok(())
 }

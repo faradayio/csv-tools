@@ -1,8 +1,8 @@
 //! Interface to SmartyStreets REST API.
 
 use failure::{format_err, ResultExt};
-use futures::compat::Future01CompatExt;
-use hyper::{client::HttpConnector, rt::Stream, Body, Client, Request};
+use futures::stream::StreamExt;
+use hyper::{client::HttpConnector, Body, Client, Request};
 use hyper_tls::HttpsConnector;
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -143,16 +143,24 @@ async fn street_addresses_impl(
         .uri(url.as_str())
         .header("Content-Type", "application/json; charset=utf-8")
         .body(Body::from(serde_json::to_string(&requests)?))?;
-    let res = client.request(req).compat().await?;
+    let res = client.request(req).await?;
     let status = res.status();
-    let body_data = res.into_body().concat2().compat().await?;
-    let body = str::from_utf8(&body_data)?;
+    let mut body = res.into_body();
+    let mut body_data = vec![];
+    while let Some(chunk_result) = body.next().await {
+        let chunk = chunk_result?;
+        body_data.extend(&chunk[..]);
+    }
 
     // Check the request status.
     if status.is_success() {
-        let resps: Vec<AddressResponse> = serde_json::from_str(body)?;
+        let resps: Vec<AddressResponse> = serde_json::from_slice(&body_data)?;
         Ok(unpack_vec(resps, requests.len(), |resp| resp.input_index)?)
     } else {
-        Err(format_err!("geocoding error: {}\n{}", status, body))
+        Err(format_err!(
+            "geocoding error: {}\n{}",
+            status,
+            String::from_utf8_lossy(&body_data),
+        ))
     }
 }

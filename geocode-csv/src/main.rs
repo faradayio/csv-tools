@@ -6,7 +6,7 @@
 use common_failures::quick_main;
 use env_logger;
 use failure::Error;
-use futures::{FutureExt, TryFutureExt};
+use futures::FutureExt;
 use std::{path::PathBuf, result};
 use structopt::StructOpt;
 
@@ -68,6 +68,6 @@ fn run() -> Result<()> {
     // Pass our future to our async runtime.
     let mut runtime =
         tokio::runtime::Runtime::new().expect("Unable to create a runtime");
-    runtime.block_on(geocode_fut.boxed().compat())?;
+    runtime.block_on(geocode_fut.boxed())?;
     Ok(())
 }

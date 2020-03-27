@@ -19,9 +19,9 @@ common_failures = "0.1.1"
 csv = "1.0.7"
 env_logger = "0.7.1"
 failure = "0.1.5"
-futures-preview = { version = "0.3.0-alpha", features = ["compat"] }
-hyper = "0.12"
-hyper-tls = "0.3"
+futures = "0.3.4"
+hyper = "0.13.4"
+hyper-tls = "0.4.1"
 log = "0.4.6"
 serde = { version = "1.0.92", features = ["derive"] }
 # IMPORTANT: We require `preserve_order` to correctly handle "structure" JSON'
@@ -30,5 +30,5 @@ serde_json = { version = "1.0.39", features = ["preserve_order"] }
 structopt = "0.3.4"
 strum = "0.18.0"
 strum_macros = "0.18.0"
-tokio = "0.1"
+tokio = { version = "0.2.13", features = ["io-util", "stream", "sync"] }
 url = "2.1.1"

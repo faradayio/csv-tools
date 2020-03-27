@@ -1,9 +1,9 @@
 //! Utilities for working with async tasks.
 
-use failure::{format_err, ResultExt};
-use futures::compat::Future01CompatExt;
+use failure::ResultExt;
+use futures::executor::block_on;
 use std::thread;
-use tokio::{prelude::*, sync::mpsc};
+use tokio::sync::mpsc;
 
 use crate::Result;
 
@@ -18,31 +18,28 @@ where
     T: Send + 'static,
 {
     // Spawn a worker thread outside our thread pool to do the actual work.
-    let (sender, receiver) = mpsc::channel(1);
+    let (mut sender, mut receiver) = mpsc::channel(1);
     let thr = thread::Builder::new().name(thread_name);
     let handle = thr
         .spawn(move || {
-            sender.send(f()).wait().expect(
-                "should always be able to send results from background thread",
-            );
+            if let Err(_) = block_on(sender.send(f())) {
+                panic!("should always be able to send results from background thread");
+            }
         })
         .context("could not spawn thread")?;
 
     // Wait for our worker to report its results.
-    let background_result = receiver.into_future().compat().await;
+    let background_result = receiver.recv().await;
     let result = match background_result {
         // The background thread sent an `Ok`.
-        Ok((Some(Ok(value)), _receiver)) => Ok(value),
+        Some(Ok(value)) => Ok(value),
         // The background thread sent an `Err`.
-        Ok((Some(Err(err)), _receiver)) => Err(err),
+        Some(Err(err)) => Err(err),
         // The background thread exitted without sending anything. This
         // shouldn't happen.
-        Ok((None, _receiver)) => {
+        None => {
             unreachable!("background thread did not send any results");
         }
-        // We couldn't read a result from the background thread, probably
-        // because it panicked.
-        Err(_) => Err(format_err!("background thread panicked")),
     };
 
     // Block until our worker exits. This is a synchronous block in an
