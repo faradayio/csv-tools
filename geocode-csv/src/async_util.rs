@@ -22,7 +22,7 @@ where
     let thr = thread::Builder::new().name(thread_name);
     let handle = thr
         .spawn(move || {
-            if let Err(_) = block_on(sender.send(f())) {
+            if block_on(sender.send(f())).is_err() {
                 panic!("should always be able to send results from background thread");
             }
         })
