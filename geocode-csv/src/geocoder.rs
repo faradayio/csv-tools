@@ -234,7 +234,7 @@ fn read_csv_from_stdin(
     let chunk_size = max(1, GEOCODE_SIZE / spec.prefix_count());
 
     // Build our output headers.
-    let mut out_headers = in_headers.clone();
+    let mut out_headers = in_headers;
     for prefix in spec.prefixes() {
         structure.add_header_columns(prefix, &mut out_headers)?;
     }
@@ -275,11 +275,7 @@ fn read_csv_from_stdin(
     // rows that haven't been sent yet.
     if !sent_chunk || !rows.is_empty() {
         trace!("sending final {} input rows", rows.len());
-        block_on(tx.send(Message::Chunk(Chunk {
-            shared: shared.clone(),
-            rows,
-        })))
-        .map_err(|_| {
+        block_on(tx.send(Message::Chunk(Chunk { shared, rows }))).map_err(|_| {
             format_err!("could not send rows to geocoder (perhaps it failed)")
         })?;
     }

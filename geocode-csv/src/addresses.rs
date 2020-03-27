@@ -48,14 +48,41 @@ impl ColumnKeyOrKeys<usize> {
     ) -> Result<Cow<'a, str>> {
         match self {
             ColumnKeyOrKeys::Key(key) => Ok(Cow::Borrowed(&record[*key])),
-            ColumnKeyOrKeys::Keys(keys) => Ok(Cow::Owned(
-                keys.iter()
-                    .map(|key| &record[*key])
-                    .collect::<Vec<_>>()
-                    .join(" "),
-            )),
+            ColumnKeyOrKeys::Keys(keys) => {
+                // Allocate an empty string with some reserved space so we maybe don't
+                // need to reallocate it every time we append.
+                let mut extracted = String::with_capacity(40);
+                for key in keys {
+                    let s = &record[*key];
+                    if extracted.is_empty() {
+                        extracted.push_str(s);
+                    } else if extracted.ends_with(s) {
+                        // Already there, so ignore it. This appears in a lot of
+                        // real-world databases, for some reason.
+                    } else {
+                        extracted.push_str(" ");
+                        extracted.push_str(s);
+                    }
+                }
+                Ok(Cow::Owned(extracted))
+            }
         }
     }
+}
+
+#[test]
+fn extract_collapses_duplicate_suffixes() {
+    // This seems really arbitrary, but it consistently appears in many
+    // real-world databases.
+    //
+    // I wonder if the equivalent "prefix" case is common?
+    use std::iter::FromIterator;
+    let record = StringRecord::from_iter(&["100", "Main Street #302", "#302"]);
+    let keys = ColumnKeyOrKeys::Keys(vec![0, 1, 2]);
+    assert_eq!(
+        keys.extract_from_record(&record).unwrap(),
+        "100 Main Street #302",
+    );
 }
 
 /// The column names from a CSV file that we want to use as addresses.

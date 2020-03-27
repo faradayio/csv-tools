@@ -20,8 +20,6 @@ script:
   # Require clippy to pass without warnings. This also fails for regular Rust
   # warnings.
   - cargo clippy -- -D warnings
-  # Run our security, license and duplicate dependency version detector.
-  - cargo deny check
 before_deploy:
   #- cargo doc
   - ./build-release geocode-csv "${TRAVIS_TAG}-${TRAVIS_OS_NAME}"
