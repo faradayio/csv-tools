@@ -1,0 +1,32 @@
+# Project policies.
+#
+# These policies can be enforced using `cargo deny check`.
+
+[licenses]
+# Don't allow code with an unclear license.
+unlicensed = "deny"
+
+# Don't allow "copylefted" licenses unless they're listed below.
+copyleft = "deny"
+
+# Allow common non-restrictive licenses.
+allow = ["MIT", "Apache-2.0", "BSD-3-Clause", "BSD-2-Clause", "CC0-1.0"]
+
+# Many organizations ban AGPL-licensed code
+# https://opensource.google/docs/using/agpl-policy/
+deny = ["AGPL-3.0"]
+
+[bans]
+# Warn about multiple versions of the same crate, unless we've indicated otherwise below.
+multiple-versions = "warn"
+
+skip = [
+    # clap v2.33.0 still uses an older version.
+    { name = "strsim", version = "0.8.0" },
+    # mio uses an older version.
+    { name = "winapi", version = "0.2.8" },
+]
+
+skip-tree = []
+
+
