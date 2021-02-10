@@ -1,0 +1,26 @@
+[package]
+name = "hashcsv"
+version = "0.1.1"
+authors = ["Eric Kidd <git@randomhacks.net>"]
+edition = "2018"
+description = "Append an `id` column to each row of a CSV file, containing a UUID v5 hash of the row"
+license = "MIT/Apache-2.0"
+repository = "https://github.com/faradayio/csv-tools"
+homepage = "https://github.com/faradayio/csv-tools/blob/main/hashcsv/README.md"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.38"
+clap = { version = "2.33.3", features = ["wrap_help"] }
+csv = "1.1.5"
+env_logger = "0.8.2"
+log = "0.4.14"
+regex = "1.4.3"
+serde = "1.0.123"
+structopt = "0.3.21"
+time = "0.2.25"
+uuid = { version = "0.8.2", features = ["v5"] }
+
+[dev-dependencies]
+cli_test_dir = "0.1.7"

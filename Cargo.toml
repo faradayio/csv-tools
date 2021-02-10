@@ -1,0 +1,6 @@
+[workspace]
+members = ["hashcsv"]
+
+[profile.release]
+# Set this to enable profiling, at the cost of making the binaries much bigger.
+#debug = 1
