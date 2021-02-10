@@ -1,0 +1,98 @@
+name: CI for hashcsv
+
+# Controls when the action will run. Triggers the workflow on push or pull request
+# events but only for the master branch
+on:
+  push:
+    # Run on the master branch.
+    branches: [main]
+    # Build anything with an appropriate release tag.
+    tags: ["hashcsv_*"]
+    paths:
+      - "hashcsv/**"
+  pull_request:
+    # Only run on pull requests against master.
+    branches: [main]
+    paths:
+      - "hashcsv/**"
+
+defaults:
+  run:
+    # Run all steps in this working directory.
+    working-directory: hashcsv
+
+jobs:
+  # We run this job first, to create any GitHub release that we might need.
+  # Creating a release can only be done once, so we need to split it out from
+  # other jobs.
+  create_release:
+    name: Create release (if needed)
+    runs-on: ubuntu-latest
+    outputs:
+      release_version: ${{ steps.extract_release_version.outputs.release_version }}
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+      - name: Extract release version
+        id: extract_release_version
+        run: |
+          release_version="$(echo '${{ github.ref }}' | sed 's,^.*/\([^/]*\),\1,; s,^hashcsv_,,; s,^v,,' )"
+          echo Release version: $release_version
+          echo "::set-output name=release_version::$release_version"
+      - name: Extract release body from CHANGELOG.md
+        id: extract_release_body
+        if: ${{ startsWith(github.ref, 'refs/tags/hashcsv_') }}
+        # Use `clparse` to parse `CHANGELOG.md` and extract release notes.
+        run: |
+          curl -sLO https://github.com/marcaddeo/clparse/releases/download/0.8.0/clparse-0.8.0-x86_64-unknown-linux-musl.tar.gz
+          tar xzf clparse*.tar.gz
+          sudo cp clparse /usr/local/bin
+          rm -rf clparse*
+          clparse -f json CHANGELOG.md | \
+            jq ".releases[] | select(.version == \"${{ steps.extract_release_version.outputs.release_version }}\") | { title: \"\", description: \"\", releases: [.] }" | \
+            clparse - | \
+            tail -n +3 > RELEASE_BODY.md
+      - name: "Make release"
+        id: create_release
+        if: ${{ startsWith(github.ref, 'refs/tags/hashcsv_') }}
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: "hashcsv ${{ steps.extract_release_version.outputs.release_version }}"
+          body_path: hashcsv/RELEASE_BODY.md
+
+  # We use a matrix to run our build on every supported platform.
+  build:
+    needs:
+      - create_release
+
+    strategy:
+      matrix:
+        # The type of runner that the job will run on.
+        os: ["ubuntu-latest", "macos-latest"]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+      - name: Test and build release
+        id: build_release
+        working-directory: .
+        run: |
+          export RELEASE_VERSION="${{ needs.create_release.outputs.release_version }}"
+          ./build-release hashcsv
+          echo "::set-output name=release_file::$(echo hashcsv-*.zip)"
+      - name: Upload Release Asset
+        if: ${{ startsWith(github.ref, 'refs/tags/hashcsv_') }}
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create_release.outputs.upload_url }}
+          asset_path: ./${{ steps.build_release.outputs.release_file }}
+          asset_name: ${{ steps.build_release.outputs.release_file }}
+          asset_content_type: application/zip
