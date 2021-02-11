@@ -1,0 +1,5 @@
+target/
+**/*.rs.bk
+/geochunk-*.zip
+/geochunk_*.csv.sz
+/geochunk

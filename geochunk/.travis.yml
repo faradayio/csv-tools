@@ -1,0 +1,20 @@
+language: rust
+sudo: required
+os:
+- linux
+- osx
+rust:
+- stable
+services:
+- docker
+before_deploy: "./build-release geochunk ${TRAVIS_TAG}-${TRAVIS_OS_NAME}"
+deploy:
+  provider: releases
+  api_key:
+    secure: dcnAaPYxCiOk01N++hpf7Yl5zcOWNBmnL03lSnitHi1mCFsUimC+YBURK6iv0lZ2+xjhnzhdoTA2glAtU3iJlWWZJXYi1bWPVlDi+212aTU2IsmGEmDJnAv4TmtiI0CPDKEKOcE8TZEg+ur+iXJ84DjcfhX9rPGQpWOz2F/90xhh11QW11iu5japHfKPZw2Ii4+/NEzBL076tR7EzfjEpAayyV/7WlsEmwbKbKnV16eVqSUfM4t+Kc/c6k475/i2bcjxGIwVd1trsgN+gYDHv17lrO0PV28a2LM3lo/BvN+vNJSQnoyZHR07iX5BVzTdq6v3rxwKMTA3LBEXUxOoOA8d9/Jn8vooEpSjayX+BI+IBuJNCHeq6F3Q/T4fF7Eaz8tV/pJB2lwmHc30RQF88bwbnWeZdSIrefLWWPAbF8RS2hm2r8FLzkXjBT8HnN7h8SWaWpZnvj+lI17TNVC4AQaYMHU2ZCTExkYobLp/9MftvolVbOuzSpOFSStCrqRSz9FYVof/OBJLB82iZV2mwYUFDfC9WTqYGq+98LVFAo6AlPRJZw55Eib/YL12FzoNnzodPuFdsHOauaGF+Ug9WTEyAUY4JVlsA0+6SE7jRrFLLmHga3Xe9wpN8rSeZl1T7W2EC7dx+jiLtG+rPscQC8vnLMW5m+8PP/W4nA4fFTE=
+  file_glob: true
+  file: "geochunk-${TRAVIS_TAG}-${TRAVIS_OS_NAME}.*"
+  skip_cleanup: true
+  on:
+    rust: stable
+    tags: true
