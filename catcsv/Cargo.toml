@@ -2,6 +2,7 @@
 name = "catcsv"
 version = "0.1.1"
 authors = ["Eric Kidd <git@randomhacks.net>"]
+edition = "2018"
 
 description = "Concatenate directories of (possibly-compressed CSV) files into one CSV file"
 license = "MIT/Apache-2.0"

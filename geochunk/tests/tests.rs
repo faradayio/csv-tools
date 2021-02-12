@@ -1,5 +1,3 @@
-extern crate cli_test_dir;
-
 use cli_test_dir::*;
 
 #[test]
@@ -23,9 +21,7 @@ fn export_zip2010_outputs_csv() {
         .cmd()
         .args(&["export", "zip2010", "250000"])
         .expect_success();
-    assert!(output
-                .stdout_str()
-                .contains("zip,geochunk_zip2010_250000"));
+    assert!(output.stdout_str().contains("zip,geochunk_zip2010_250000"));
     assert!(output.stdout_str().contains("01830,018_1"));
 }
 
@@ -37,9 +33,7 @@ fn export_zip2010_handles_small_chunk_sizes() {
         // 0 is the smallest imaginable chunk.
         .args(&["export", "zip2010", "0"])
         .expect_success();
-    assert!(output
-                .stdout_str()
-                .contains("zip,geochunk_zip2010_0"));
+    assert!(output.stdout_str().contains("zip,geochunk_zip2010_0"));
 }
 
 #[test]
@@ -55,10 +49,12 @@ H. Smith,
         .args(&["csv", "zip2010", "250000", "postcode"])
         .output_with_stdin(input)
         .expect_success();
-    assert_eq!(output.stdout_str(),
-               "\
+    assert_eq!(
+        output.stdout_str(),
+        "\
 name,postcode,geochunk_zip2010_250000
 J. Doe,90210,902_0
 H. Smith,,
-");
+"
+    );
 }

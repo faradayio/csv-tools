@@ -1,7 +1,5 @@
 //! Integration tests for our CLI.
 
-extern crate cli_test_dir;
-
 use cli_test_dir::*;
 
 #[test]

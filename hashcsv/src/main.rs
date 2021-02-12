@@ -17,7 +17,9 @@ const BUFFER_SIZE: usize = 256 * 1024;
 
 /// Command-line options.
 #[derive(Debug, StructOpt)]
-#[structopt(about = "Add an `id` column to a CSV file based on a hash of the other columns")]
+#[structopt(
+    about = "Add an `id` column to a CSV file based on a hash of the other columns"
+)]
 struct Opt {
     /// Input file (uses stdin if omitted).
     input: Option<PathBuf>,
@@ -104,7 +106,8 @@ fn run(opt: &Opt) -> Result<()> {
         uuid_buffer.clear();
         {
             let mut uuid_buffer_cursor = Cursor::new(&mut uuid_buffer);
-            write!(&mut uuid_buffer_cursor, "{}", uuid).context("could not write to buffer")?;
+            write!(&mut uuid_buffer_cursor, "{}", uuid)
+                .context("could not write to buffer")?;
         }
         record.push_field(&uuid_buffer);
 

@@ -1,27 +1,23 @@
 // `error_chain!` can recurse deeply
 #![recursion_limit = "1024"]
-
 // Enable clippy if we were asked to do so.
-#![cfg_attr(feature="clippy", feature(plugin))]
-#![cfg_attr(feature="clippy", plugin(clippy))]
+#![cfg_attr(feature = "clippy", feature(plugin))]
+#![cfg_attr(feature = "clippy", plugin(clippy))]
 
-extern crate csv;
-extern crate docopt;
-extern crate env_logger;
+use env_logger;
 #[macro_use]
 extern crate error_chain;
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
 extern crate log;
-extern crate regex;
-extern crate serde;
+
 #[macro_use]
 extern crate serde_derive;
 
 use docopt::Docopt;
-use serde::{Deserialize, Deserializer};
 use serde::de::Error as DeError;
+use serde::{Deserialize, Deserializer};
 use std::io;
 use std::process;
 use std::result;
@@ -29,7 +25,7 @@ use std::result;
 mod errors;
 mod zip2010;
 
-use errors::*;
+use crate::errors::*;
 
 /// Specify what data set we should use for generating chunks.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -106,7 +102,8 @@ fn run() -> Result<()> {
     }
 
     // Generate our table of chunks.
-    let population = args.arg_population
+    let population = args
+        .arg_population
         .expect("Population should have been required by docopt");
     let classifier = zip2010::Classifier::new(population);
 
@@ -117,10 +114,10 @@ fn run() -> Result<()> {
     } else if args.cmd_csv {
         let stdin = io::stdin();
         let stdout = io::stdout();
-        let column = args.arg_input_column
+        let column = args
+            .arg_input_column
             .expect("Column should have been required by docopt");
-        classifier
-            .transform_csv(&column, &mut stdin.lock(), &mut stdout.lock())?;
+        classifier.transform_csv(&column, &mut stdin.lock(), &mut stdout.lock())?;
     } else {
         unreachable!("unknown subcommand, should have been caught by docopt");
     }

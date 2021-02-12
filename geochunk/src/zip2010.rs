@@ -4,13 +4,13 @@ use csv;
 #[cfg(test)]
 use env_logger;
 use regex::Regex;
-use std::collections::HashMap;
 use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::default::Default;
 use std::io::prelude::*;
 use std::str::from_utf8;
 
-use errors::*;
+use crate::errors::*;
 
 /// The length of a basic zip code, in digits.
 const ZIP_CODE_LENGTH: usize = 5;
@@ -29,9 +29,11 @@ impl Classifier {
     pub fn new(target_population: u64) -> Classifier {
         let prefix_population = PrefixPopulation::new();
         let mut chunk_id_for_prefix = HashMap::<String, String>::new();
-        prefix_population.build_chunks_recursive(target_population,
-                                                 "",
-                                                 &mut chunk_id_for_prefix);
+        prefix_population.build_chunks_recursive(
+            target_population,
+            "",
+            &mut chunk_id_for_prefix,
+        );
         Classifier {
             target_population: target_population,
             chunk_id_for_prefix: chunk_id_for_prefix,
@@ -79,14 +81,15 @@ impl Classifier {
     }
 
     /// Export this mapping as a CSV file.
-    pub fn export(&self, out: &mut Write) -> Result<()> {
+    pub fn export(&self, out: &mut dyn Write) -> Result<()> {
         let mut wtr = csv::WriterBuilder::new()
             .has_headers(false)
             .from_writer(out);
         wtr.serialize(["zip", &self.geochunk_column_name()])?;
         for zip_int in 0..100000 {
             let zip = format!("{:05}", zip_int);
-            let chunk_id = self.chunk_for(&zip)
+            let chunk_id = self
+                .chunk_for(&zip)
                 // This is a genuine assertion failure.
                 .expect("all zip codes should have a chunk");
             wtr.serialize([&zip[..], &chunk_id])?;
@@ -95,11 +98,12 @@ impl Classifier {
     }
 
     /// Read a CSV file, add a geochunk column, and write it back out again.
-    pub fn transform_csv(&self,
-                         input_column: &str,
-                         input: &mut Read,
-                         output: &mut Write)
-                         -> Result<()> {
+    pub fn transform_csv(
+        &self,
+        input_column: &str,
+        input: &mut dyn Read,
+        output: &mut dyn Write,
+    ) -> Result<()> {
         let mut rdr = csv::Reader::from_reader(input);
         let mut wtr = csv::WriterBuilder::new()
             .has_headers(false)
@@ -182,10 +186,10 @@ impl PrefixPopulation {
 
         let mut rdr = csv::Reader::from_reader(ZIP_POPULATION_CSV.as_bytes());
         for row in rdr.records() {
-            let (zip, pop): (String, u64) =
-                row.expect("Invalid CSV data built into executable")
-                    .deserialize(None)
-                    .expect("Invalid CSV data built into executable");
+            let (zip, pop): (String, u64) = row
+                .expect("Invalid CSV data built into executable")
+                .deserialize(None)
+                .expect("Invalid CSV data built into executable");
 
             // For each prefix of this zip code, increment the population of
             // that prefix.
@@ -220,10 +224,12 @@ impl PrefixPopulation {
     }
 
     // Build zip code chunks based on population data.
-    fn build_chunks_recursive(&self,
-                              target_population: u64,
-                              prefix: &str,
-                              chunk_id_for_prefix: &mut HashMap<String, String>) {
+    fn build_chunks_recursive(
+        &self,
+        target_population: u64,
+        prefix: &str,
+        chunk_id_for_prefix: &mut HashMap<String, String>,
+    ) {
         let prefix_pop = self.lookup(prefix);
         if prefix_pop <= target_population || prefix.len() == ZIP_CODE_LENGTH {
             // We're small enough to fill a chunk on our own, or we can't be
@@ -239,9 +245,11 @@ impl PrefixPopulation {
                 let child_prefix = format!("{}{}", prefix, digit);
                 let child_pop = self.lookup(&child_prefix);
                 if child_pop >= target_population {
-                    self.build_chunks_recursive(target_population,
-                                                &child_prefix,
-                                                chunk_id_for_prefix);
+                    self.build_chunks_recursive(
+                        target_population,
+                        &child_prefix,
+                        chunk_id_for_prefix,
+                    );
                 } else {
                     leftovers.push(child_prefix);
                 }
@@ -261,10 +269,12 @@ impl PrefixPopulation {
                 }
                 chunk_pop += child_pop;
                 let chunk_id = format!("{}_{}", prefix, chunk_idx);
-                trace!("Mapping {} (pop {}) to {}",
-                       child_prefix,
-                       child_pop,
-                       chunk_id);
+                trace!(
+                    "Mapping {} (pop {}) to {}",
+                    child_prefix,
+                    child_pop,
+                    chunk_id
+                );
                 chunk_id_for_prefix.insert(child_prefix, chunk_id);
             }
         }

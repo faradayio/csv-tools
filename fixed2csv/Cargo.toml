@@ -2,6 +2,7 @@
 name = "fixed2csv"
 version = "0.1.0"
 authors = ["Eric Kidd <git@randomhacks.net>"]
+edition = "2018"
 license = "MIT/Apache-2.0"
 
 [dependencies]

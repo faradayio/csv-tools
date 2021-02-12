@@ -262,7 +262,7 @@ fn run() -> Result<()> {
                 .context("cannot write record")?;
         } else {
             // We need to apply one or more cleanups, so run the slow path.
-            let cleaned = record.into_iter().map(|mut val: &[u8]| -> Cow<[u8]> {
+            let cleaned = record.into_iter().map(|mut val: &[u8]| -> Cow<'_, [u8]> {
                 // Convert values matching `--null` regex to empty strings.
                 if let Some(ref null_re) = null_re {
                     if null_re.is_match(&val) {
@@ -304,7 +304,7 @@ fn run() -> Result<()> {
             } else {
                 // We need to rebuild the record, check for null columns,
                 // and only output the record if everything's OK.
-                let row = cleaned.collect::<Vec<Cow<[u8]>>>();
+                let row = cleaned.collect::<Vec<Cow<'_, [u8]>>>();
                 for (value, &is_required_col) in row.iter().zip(required_cols.iter()) {
                     // If the column is NULL but shouldn't be, bail on this row.
                     if is_required_col && value.is_empty() {
