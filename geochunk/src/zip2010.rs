@@ -1,8 +1,5 @@
 //! Support for chunks based on 2010 census population data.
 
-use csv;
-#[cfg(test)]
-use env_logger;
 use regex::Regex;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
@@ -35,8 +32,8 @@ impl Classifier {
             &mut chunk_id_for_prefix,
         );
         Classifier {
-            target_population: target_population,
-            chunk_id_for_prefix: chunk_id_for_prefix,
+            target_population,
+            chunk_id_for_prefix,
         }
     }
 
@@ -142,7 +139,7 @@ impl Classifier {
 
 #[test]
 fn classifies_sample_zip_codes_as_expected() {
-    let _ = env_logger::init();
+    let _ = env_logger::try_init();
     let classifier = Classifier::new(250000);
     assert_eq!(classifier.chunk_for("01000").unwrap(), "010_0");
     assert_eq!(classifier.chunk_for("07720").unwrap(), "077_1");
@@ -151,7 +148,7 @@ fn classifies_sample_zip_codes_as_expected() {
 
 #[test]
 fn does_not_assign_geochunks_to_missing_or_invalid_zips() {
-    let _ = env_logger::init();
+    let _ = env_logger::try_init();
     let classifier = Classifier::new(250000);
     assert!(classifier.chunk_for("").is_none());
     assert!(classifier.chunk_for("0").is_none());
@@ -160,7 +157,7 @@ fn does_not_assign_geochunks_to_missing_or_invalid_zips() {
 
 #[test]
 fn does_not_panic_on_corner_cases() {
-    let _ = env_logger::init();
+    let _ = env_logger::try_init();
     let classifier = Classifier::new(250000);
     // I don't actually care whether or not this is mapped to a geochunk or
     // not, because we don't try to do detailed validation until _after_
@@ -173,7 +170,7 @@ type PrefixPopulationMaps = [HashMap<String, u64>; ZIP_CODE_LENGTH + 1];
 
 /// Directly include our zip code population data in our application binary
 /// for ease of distribution and packaging.
-const ZIP_POPULATION_CSV: &'static str = include_str!("zip2010.csv");
+const ZIP_POPULATION_CSV: &str = include_str!("zip2010.csv");
 
 /// The population associated with a zip code prefix.
 struct PrefixPopulation {
@@ -206,7 +203,7 @@ impl PrefixPopulation {
             }
         }
 
-        PrefixPopulation { maps: maps }
+        PrefixPopulation { maps }
     }
 
     /// Look up the population of a zip code prefix.  Calling this function

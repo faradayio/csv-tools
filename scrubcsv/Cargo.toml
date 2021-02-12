@@ -10,15 +10,10 @@ readme = "README.md"
 repository = "https://github.com/faradayio/scrubcsv"
 homepage = "https://github.com/faradayio/scrubcsv"
 
-[profile.dev]
-# We always want to be fast, even in debug mode.  Comment this out for much
-# faster compiles.
-opt-level = 3
-
 [dependencies]
 clap = { version = "2.33.0", features = ["wrap_help"] }
 csv = "1"
-env_logger = "0.7"
+env_logger = "0.8"
 humansize = "1.0.1"
 lazy_static = "1.2.0"
 libc = "0.2.18"
@@ -26,7 +21,6 @@ log = "0.4"
 regex = "1"
 serde = "1.0"
 structopt = "0.3.3"
-time = "0.2.2"
 
 [dev-dependencies]
 cli_test_dir = "0.1.1"

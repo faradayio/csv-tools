@@ -18,7 +18,7 @@ where
     T: Send + 'static,
 {
     // Spawn a worker thread outside our thread pool to do the actual work.
-    let (mut sender, mut receiver) = mpsc::channel(1);
+    let (sender, mut receiver) = mpsc::channel(1);
     let thr = thread::Builder::new().name(thread_name);
     let handle = thr
         .spawn(move || {

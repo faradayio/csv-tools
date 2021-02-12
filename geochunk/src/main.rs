@@ -1,19 +1,9 @@
-// `error_chain!` can recurse deeply
-#![recursion_limit = "1024"]
-// Enable clippy if we were asked to do so.
-#![cfg_attr(feature = "clippy", feature(plugin))]
-#![cfg_attr(feature = "clippy", plugin(clippy))]
-
-use env_logger;
 #[macro_use]
 extern crate error_chain;
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
 extern crate log;
-
-#[macro_use]
-extern crate serde_derive;
 
 use docopt::Docopt;
 use serde::de::Error as DeError;
@@ -52,7 +42,7 @@ impl<'de> Deserialize<'de> for ChunkType {
     }
 }
 
-const USAGE: &'static str = "
+const USAGE: &str = "
 geochunk - Partition data sets by estimated population.
 
 Usage:
@@ -89,7 +79,7 @@ quick_main!(run);
 
 /// Our actual `main` function, called by the `quick_main!` macro above.
 fn run() -> Result<()> {
-    env_logger::init().expect("Could not initialize logging");
+    env_logger::init();
     let args: Args = Docopt::new(USAGE)
         .and_then(|d| d.deserialize())
         .unwrap_or_else(|e| e.exit());

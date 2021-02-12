@@ -13,6 +13,7 @@ use std::{
     io::{self, prelude::*},
     path::PathBuf,
     process,
+    time::Instant,
 };
 use structopt::StructOpt;
 
@@ -25,7 +26,7 @@ mod util;
 // Import from our own crates.
 use crate::errors::*;
 use crate::uniquifier::Uniquifier;
-use crate::util::{now, CharSpecifier};
+use crate::util::CharSpecifier;
 
 /// Use reasonably large input and output buffers. This seems to give us a
 /// performance boost of around 5-10% compared to the standard 8 KiB buffer used
@@ -120,7 +121,7 @@ fn run() -> Result<()> {
     debug!("Options: {:#?}", opt);
 
     // Remember the time we started.
-    let start_time = now();
+    let start_time = Instant::now();
 
     // Build a regex containing our `--null` value.
     let null_re = if let Some(null_re_str) = opt.null.as_ref() {
@@ -323,7 +324,7 @@ fn run() -> Result<()> {
 
     // Print out some information about our run.
     if !opt.quiet {
-        let ellapsed = (now() - start_time).as_seconds_f64();
+        let ellapsed = start_time.elapsed().as_secs_f64();
         let bytes_per_second = (rdr.position().byte() as f64 / ellapsed) as i64;
         eprintln!(
             "{} rows ({} bad) in {:.2} seconds, {}/sec",

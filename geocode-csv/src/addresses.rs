@@ -60,7 +60,7 @@ impl ColumnKeyOrKeys<usize> {
                         // Already there, so ignore it. This appears in a lot of
                         // real-world databases, for some reason.
                     } else {
-                        extracted.push_str(" ");
+                        extracted.push(' ');
                         extracted.push_str(s);
                     }
                 }
@@ -110,9 +110,9 @@ pub struct AddressColumnKeys<K: Default + Eq> {
 
 impl AddressColumnKeys<usize> {
     /// Given a CSV row, extract an `Address` value to send to SmartyStreets.
-    pub fn extract_address_from_record<'a>(
+    pub fn extract_address_from_record(
         &self,
-        record: &'a StringRecord,
+        record: &StringRecord,
     ) -> Result<Address> {
         Ok(Address {
             street: self.street.extract_from_record(record)?.into_owned(),
@@ -201,7 +201,7 @@ impl<Key: Default + Eq> AddressColumnSpec<Key> {
             .map(|k| &k[..])
             .collect::<Vec<_>>();
         // Do not remove this `sort`!
-        prefixes.sort();
+        prefixes.sort_unstable();
         prefixes
     }
 

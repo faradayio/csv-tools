@@ -8,3 +8,14 @@ This repository contains tools for manipulating CSV files, all written in Rust. 
 - [`geocode-csv`](./geocode-csv): Geocode CSV files in bulk using the SmartyStreets API.
 - [`scrubcsv`](./scrubcsv): Turn messy, slightly corrupt CSV files into something clean and standardized.
 - [`hashcsv`](./hashcsv): Add a new column to a CSV file, containing a hash of the other columns. Useful for de-duplicating.
+
+## Current coding standards
+
+In general, this repository should contain standard modern Rust code, formatting using `cargo fmt` and the supplied settings. The code should have no warnings when run with `clippy`.
+
+These tools were written over several years, and they represent a history of Rust at Faraday. The following dependencies should be replaced if we get the chance:
+
+- `docopt`: Replace with `structopt`.
+- `error_chain` and `failure`: Replace with `anyhow` (plus `thiserror` if we need specific custom error types).
+
+In general, it's a good idea to update any older code to match the newest code.

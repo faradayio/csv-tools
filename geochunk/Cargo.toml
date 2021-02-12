@@ -14,16 +14,14 @@ homepage = "http://blog.faraday.io/geochunk-fast-intelligent-splitting-for-piles
 cli_test_dir = "0.1.2"
 
 [dependencies]
-# Enable this by passing `--features "clippy"` to cargo.  Needs nightly Rust.
-clippy = { version = "0.0.*", optional = true }
 csv = "1"
-docopt = "0.8"
-env_logger = "0.4"
-error-chain = "0.11"
-lazy_static = "0.2"
-log = "0.3.7"
-regex = "0.2"
+docopt = "1.1"
+env_logger = "0.8.3"
+error-chain = "0.12.4"
+lazy_static = "1.4"
+log = "0.4.14"
+regex = "1.4.3"
 serde = "1.0"
 serde_derive = "1.0"
-snap = "0.2.1"
-walkdir = "1.0.7"
+snap = "1.0.4"
+walkdir = "2.3.1"

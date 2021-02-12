@@ -1,12 +1,7 @@
-use csv;
-
-#[macro_use]
-extern crate log;
-use structopt;
-
 use failure::Error;
 use humansize::{file_size_opts, FileSize};
 use humantime::format_duration;
+use log::debug;
 use std::{
     cmp::min,
     io::{prelude::*, stdin, stdout, BufReader},
@@ -95,8 +90,10 @@ fn extract_fields(
             // Get our column.
             let mut field = &line[min(offset, end)..min(offset + width, end)];
 
-            // Strip spaces and add to our output record.
-            while field.len() > 0 && field[field.len() - 1] == b' ' {
+            // Strip spaces and add to our output record. We do this the hard
+            // way because there's no stable API on `&[u8]` that works like
+            // `trim_end_matches`.
+            while !field.is_empty() && field[field.len() - 1] == b' ' {
                 field = &field[..field.len() - 1];
             }
             record.push_field(field);

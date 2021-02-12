@@ -13,14 +13,11 @@ repository = "https://github.com/faradayio/catcsv"
 cli_test_dir = "0.1.2"
 
 [dependencies]
-# Enable this by passing `--features "clippy"` to cargo.  Needs nightly Rust.
-clippy = { version = "0.0.*", optional = true }
-csv = "0.15.0"
-docopt = "0.7.0"
-env_logger = "0.4.2"
-error-chain = "0.10.0"
-log = "0.3.7"
-# Deprecated in favor of serde, but needed for doctopt:
-rustc-serialize = "0.3"
-snap = "0.2.1"
-walkdir = "1.0.7"
+csv = "1"
+docopt = "1"
+env_logger = "0.8"
+error-chain = "0.12.4"
+log = "0.4.14"
+serde = "1.0.123"
+snap = "1"
+walkdir = "2.3"
