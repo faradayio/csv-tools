@@ -1,5 +1,5 @@
 [workspace]
-members = ["hashcsv"]
+members = ["catcsv", "fixed2csv", "geochunk", "geocode-csv", "hashcsv", "scrubcsv"]
 
 [profile.release]
 # Set this to enable profiling, at the cost of making the binaries much bigger.
