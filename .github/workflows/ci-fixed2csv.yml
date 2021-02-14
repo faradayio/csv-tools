@@ -9,11 +9,15 @@ on:
     # Build anything with an appropriate release tag.
     tags: ["fixed2csv_*"]
     paths:
+      - ".github/actions"
+      - ".github/workflows/ci-fixed2csv.yml"
       - "fixed2csv/**"
   pull_request:
     # Only run on pull requests against main.
     branches: [main]
     paths:
+      - ".github/actions"
+      - ".github/workflows/ci-fixed2csv.yml"
       - "fixed2csv/**"
 
 jobs:
