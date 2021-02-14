@@ -1,0 +1,34 @@
+name: "Build (Rust)"
+description: "Build a Rust binary, and release it if appropriate"
+inputs:
+  binary_name:
+    description: The name of the binary we're releasing
+    required: true
+  should_release:
+    description: Should we make a release for this build?
+    required: true
+  release_version:
+    description: The version we're releasing.
+    required: true
+  upload_url:
+    description: A URL which we can use to upload the release binaries.
+    required: false
+runs:
+  using: "composite"
+  steps:
+    - name: Test and build release
+      id: build_release
+      run: |
+        export RELEASE_VERSION="${{ inputs.release_version }}"
+        ./build-release ${{ inputs.binary_name }}
+        echo "::set-output name=release_file::$(echo ${{ inputs.binary_name }}-*.zip)"
+    - name: Upload Release Asset
+      if: ${{ inputs.should_release }}
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ inputs.upload_url }}
+        asset_path: ./${{ steps.build_release.outputs.release_file }}
+        asset_name: ${{ steps.build_release.outputs.release_file }}
+        asset_content_type: application/zip

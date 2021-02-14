@@ -1,0 +1,58 @@
+name: CI for fixed2csv
+
+# Controls when the action will run. Triggers the workflow on push or pull
+# request events but only for the main branch.
+on:
+  push:
+    # Run on the main branch.
+    branches: [main]
+    # Build anything with an appropriate release tag.
+    tags: ["fixed2csv_*"]
+    paths:
+      - "fixed2csv/**"
+  pull_request:
+    # Only run on pull requests against main.
+    branches: [main]
+    paths:
+      - "fixed2csv/**"
+
+jobs:
+  # We run this job first, to create any GitHub release that we might need.
+  # Creating a release can only be done once, so we need to split it out from
+  # other jobs.
+  create_release:
+    name: Create release (if needed)
+    runs-on: ubuntu-latest
+    outputs:
+      # Re-output use values from our child step.
+      should_release: ${{ steps.create_release_action.outputs.should_release }}
+      release_version: ${{ steps.create_release_action.outputs.release_version }}
+      upload_url: ${{ steps.create_release_action.outputs.upload_url }}
+    steps:
+      - uses: actions/checkout@v2
+      - id: create_release_action
+        uses: ./.github/actions/rust_create_release_action.yml
+        with:
+          binary_name: fixed2csv
+
+  # We use a matrix to run our build on every supported platform.
+  build:
+    needs:
+      - create_release
+
+    strategy:
+      matrix:
+        # The type of runner that the job will run on.
+        os: ["ubuntu-latest", "macos-latest"]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Test and build release
+        uses: ./.github/actions/rust_build_action.yml
+        with:
+          binary_name: fixed2csv
+          should_release: ${{ needs.create_release.outputs.should_release }}
+          release_version: ${{ needs.create_release.outputs.release_version }}
+          upload_url: ${{ needs.create_release.outputs.upload_url }}

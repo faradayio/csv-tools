@@ -1,0 +1,52 @@
+name: Create release if needed (Rust)
+description: Create a GitHub release for a Rust binary
+inputs:
+  binary_name:
+    description: The name of the binary we're releasing
+    required: true
+outputs:
+  should_release:
+    description: Should we make a release for this build?
+    value: ${{ steps.extract_release_version.outputs.should_release }}
+  release_version:
+    description: The version we're releasing.
+    value: ${{ steps.extract_release_version.outputs.release_version }}
+  upload_url:
+    description: A URL which we can use to upload the release binaries.
+    value: ${{ steps.create_release.outputs.upload_url }}
+runs:
+  using: composite
+  steps:
+    - name: Extract release version
+      id: extract_release_version
+      outputs:
+        should_release: ${{ startsWith(github.ref, 'refs/tags/' + inputs.binary_name + '_') }}
+      working-directory: ${{ inputs.binary_name }}
+      run: |
+        release_version="$(echo '${{ github.ref }}' | sed 's,^.*/\([^/]*\),\1,; s,^${{ inputs.binary_name }}_,,; s,^v,,' )"
+        echo Release version: $release_version
+        echo "::set-output name=release_version::$release_version"
+    - name: Extract release body from CHANGELOG.md
+      id: extract_release_body
+      if: ${{ steps.extract_release_version.outputs.should_release }}
+      # Use `clparse` to parse `CHANGELOG.md` and extract release notes.
+      working-directory: ${{ inputs.binary_name }}
+      run: |
+        curl -sLO https://github.com/marcaddeo/clparse/releases/download/0.8.0/clparse-0.8.0-x86_64-unknown-linux-musl.tar.gz
+        tar xzf clparse*.tar.gz
+        sudo cp clparse /usr/local/bin
+        rm -rf clparse*
+        clparse -f json CHANGELOG.md | \
+          jq ".releases[] | select(.version == \"${{ steps.extract_release_version.outputs.release_version }}\") | { title: \"\", description: \"\", releases: [.] }" | \
+          clparse - | \
+          tail -n +3 > RELEASE_BODY.md
+    - name: Make release
+      id: create_release
+      if: ${{ steps.extract_release_version.outputs.should_release }}
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: "${{ inputs.binary_name }} ${{ steps.extract_release_version.outputs.release_version }}"
+        body_path: ${{ inputs.binary_name }}/RELEASE_BODY.md
