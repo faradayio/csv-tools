@@ -279,7 +279,7 @@ dependencies = [
 
 [[package]]
 name = "fixed2csv"
-version = "0.1.0"
+version = "0.1.1-alpha.1"
 dependencies = [
  "csv",
  "env_logger",
