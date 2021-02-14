@@ -18,6 +18,7 @@ runs:
   steps:
     - name: Test and build release
       id: build_release
+      shell: bash
       run: |
         export RELEASE_VERSION="${{ inputs.release_version }}"
         ./build-release ${{ inputs.binary_name }}
