@@ -35,7 +35,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - id: create_release_action
-        uses: ./.github/actions/rust_create_release_action.yml
+        uses: ./.github/actions/rust_create_release_action
         with:
           binary_name: fixed2csv
 
@@ -54,7 +54,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Test and build release
-        uses: ./.github/actions/rust_build_action.yml
+        uses: ./.github/actions/rust_build_action
         with:
           binary_name: fixed2csv
           should_release: ${{ needs.create_release.outputs.should_release }}
