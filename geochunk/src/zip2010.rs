@@ -89,7 +89,7 @@ impl Classifier {
                 .chunk_for(&zip)
                 // This is a genuine assertion failure.
                 .expect("all zip codes should have a chunk");
-            wtr.serialize([&zip[..], &chunk_id])?;
+            wtr.serialize([&zip[..], chunk_id])?;
         }
         Ok(())
     }

@@ -91,6 +91,11 @@ fn run() -> Result<()> {
         process::exit(0);
     }
 
+    let arg_type = args.arg_type.expect("arg_type should always be present");
+    if arg_type != ChunkType::Zip2010 {
+        return Err(format!("unsupported geochunk type: {:?}", arg_type).into());
+    }
+
     // Generate our table of chunks.
     let population = args
         .arg_population
