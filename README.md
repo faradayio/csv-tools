@@ -5,9 +5,9 @@ This repository contains tools for manipulating CSV files, all written in Rust. 
 - [`catcsv`](./catcsv): Concatenate directory of CSV files into a single CSV stream, decompressing as needed.
 - [`fixed2csv`](./fixed2csv): Convert fixed-width fields to CSV.
 - [`geochunk`](./geochunk): Add a column to a CSV file that groups records into similarly-sized chunks based on US ZIP codes and census data.
-- [`geocode-csv`](./geocode-csv): Geocode CSV files in bulk using the SmartyStreets API.
 - [`scrubcsv`](./scrubcsv): Turn messy, slightly corrupt CSV files into something clean and standardized.
 - [`hashcsv`](./hashcsv): Add a new column to a CSV file, containing a hash of the other columns. Useful for de-duplicating.
+- [`geocode-csv`](https://github.com/faradayio/geocode-csv) **(separate repo)**: Geocode CSV files in bulk using the Smarty API (or other APIs). This is in separate repo beause it depends on `tokio` and networking and a more complicated build system.
 
 ## Current coding standards
 
