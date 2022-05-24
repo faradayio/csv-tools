@@ -18,14 +18,14 @@ use std::{
 use structopt::StructOpt;
 
 // Modules defined in separate files.
+mod clean_column_names;
 #[macro_use]
 mod errors;
-mod uniquifier;
 mod util;
 
 // Import from our own crates.
+use crate::clean_column_names::ColumnNameCleanerType;
 use crate::errors::*;
-use crate::uniquifier::Uniquifier;
 use crate::util::CharSpecifier;
 
 /// Use reasonably large input and output buffers. This seems to give us a
@@ -81,10 +81,12 @@ struct Opt {
     #[structopt(long = "trim-whitespace")]
     trim_whitespace: bool,
 
-    /// Make sure column names are unique, and use only lowercase letters, numbers
-    /// and underscores.
-    #[structopt(long = "clean-column-names")]
-    clean_column_names: bool,
+    /// Make sure column names are unique, and use only lowercase letters,
+    /// numbers and underscores. "unique" (the default) will assign number
+    /// prefixes to make names unique. "stable" will use a simple, predictable
+    /// mapping, and fail with an error if the resulting names are not unique.
+    #[structopt(value_name = "CLEANER_TYPE", long = "clean-column-names")]
+    clean_column_names: Option<Option<ColumnNameCleanerType>>,
 
     /// Drop any rows where the specified column is empty or NULL. Can be passed
     /// more than once. Useful for cleaning primary key columns before
@@ -100,6 +102,17 @@ struct Opt {
     /// quoting.
     #[structopt(value_name = "CHAR", long = "quote", default_value = "\"")]
     quote: CharSpecifier,
+}
+
+impl Opt {
+    /// Get the value of `clean_column_names`, defaulting as necessary.
+    fn column_name_cleaner_type(&self) -> Option<ColumnNameCleanerType> {
+        match self.clean_column_names {
+            Some(Some(cleaner_type)) => Some(cleaner_type),
+            Some(None) => Some(ColumnNameCleanerType::Unique),
+            None => None,
+        }
+    }
 }
 
 lazy_static! {
@@ -188,13 +201,13 @@ fn run() -> Result<()> {
         .byte_headers()
         .context("cannot read headers")?
         .to_owned();
-    if opt.clean_column_names {
-        let mut uniquifier = Uniquifier::default();
+    if let Some(cleaner_type) = opt.column_name_cleaner_type() {
+        let mut cleaner = cleaner_type.build_cleaner();
         let mut new_hdr = ByteRecord::default();
         for col in hdr.into_iter() {
             // Convert from bytes to UTF-8, make unique (and clean), and convert back to bytes.
             let col = String::from_utf8_lossy(col);
-            let col = uniquifier.unique_id_for(&col)?.to_owned();
+            let col = cleaner.unique_id_for(&col)?.to_owned();
             new_hdr.push_field(col.as_bytes());
         }
         hdr = new_hdr;
@@ -266,7 +279,7 @@ fn run() -> Result<()> {
             let cleaned = record.into_iter().map(|mut val: &[u8]| -> Cow<'_, [u8]> {
                 // Convert values matching `--null` regex to empty strings.
                 if let Some(ref null_re) = null_re {
-                    if null_re.is_match(&val) {
+                    if null_re.is_match(val) {
                         val = &[]
                     }
                 }

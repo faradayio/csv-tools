@@ -4,7 +4,6 @@ use std::str::FromStr;
 
 use crate::errors::*;
 
-
 /// Specifies an optional single-byte character used to configure our CSV
 /// parser.
 #[derive(Debug)]
