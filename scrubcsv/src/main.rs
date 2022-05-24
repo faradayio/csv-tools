@@ -6,7 +6,7 @@ use csv::ByteRecord;
 use humansize::{file_size_opts, FileSize};
 use lazy_static::lazy_static;
 use log::debug;
-use regex::bytes::Regex;
+use regex::{bytes::Regex as BytesRegex, Regex};
 use std::{
     borrow::Cow,
     fs,
@@ -88,6 +88,11 @@ struct Opt {
     #[structopt(value_name = "CLEANER_TYPE", long = "clean-column-names")]
     clean_column_names: Option<Option<ColumnNameCleanerType>>,
 
+    /// Fail if the output CSV file would contain any column names matching the
+    /// specified regular expression.
+    #[structopt(long = "reserve-column-names")]
+    reserve_column_names: Option<Regex>,
+
     /// Drop any rows where the specified column is empty or NULL. Can be passed
     /// more than once. Useful for cleaning primary key columns before
     /// upserting. Uses the cleaned form of column names.
@@ -118,7 +123,7 @@ impl Opt {
 lazy_static! {
     /// Either a CRLF newline, a LF newline, or a CR newline. Any of these
     /// will break certain CSV parsers, including BigQuery's CSV importer.
-    static ref NEWLINE_RE: Regex = Regex::new(r#"\n|\r\n?"#)
+    static ref NEWLINE_RE: BytesRegex = BytesRegex::new(r#"\n|\r\n?"#)
         .expect("regex in source code is unparseable");
 }
 
@@ -140,7 +145,7 @@ fn run() -> Result<()> {
     let null_re = if let Some(null_re_str) = opt.null.as_ref() {
         // Always match the full CSV value.
         let s = format!("^{}$", null_re_str);
-        let re = Regex::new(&s).context("can't compile regular expression")?;
+        let re = BytesRegex::new(&s).context("can't compile regular expression")?;
         Some(re)
     } else {
         None
@@ -208,6 +213,14 @@ fn run() -> Result<()> {
             // Convert from bytes to UTF-8, make unique (and clean), and convert back to bytes.
             let col = String::from_utf8_lossy(col);
             let col = cleaner.unique_id_for(&col)?.to_owned();
+            if let Some(reserved_re) = &opt.reserve_column_names {
+                if reserved_re.is_match(&col[..]) {
+                    return Err(format_err!(
+                        "file used reserved column name {:?}",
+                        col
+                    ));
+                }
+            }
             new_hdr.push_field(col.as_bytes());
         }
         hdr = new_hdr;

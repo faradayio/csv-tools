@@ -219,6 +219,18 @@ fn clean_column_names_stable_rejects_certain_names() {
 }
 
 #[test]
+fn reserve_column_names() {
+    let testdir = TestDir::new("scrubcsv", "clean_column_names_stable");
+    let output = testdir
+        .cmd()
+        .arg("--clean-column-names=stable")
+        .arg("--reserve-column-names=^reserved_")
+        .output_with_stdin("a,Reserved Name\n")
+        .expect_failure();
+    assert!(output.stderr_str().contains("reserved column name"));
+}
+
+#[test]
 fn drop_row_if_null() {
     let testdir = TestDir::new("scrubcsv", "replace_newlines");
     let output = testdir
