@@ -7,7 +7,7 @@ edition = "2018"
 description = "Split a CSV semi-evenly based on ZIP population stats"
 license = "MIT/Apache-2.0"
 readme = "README.md"
-repository = "https://github.com/faradayio/geochunk"
+repository = "https://github.com/faradayio/csv-tools"
 homepage = "http://blog.faraday.io/geochunk-fast-intelligent-splitting-for-piles-of-address-data/"
 
 [dev-dependencies]

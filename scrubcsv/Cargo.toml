@@ -7,8 +7,8 @@ edition = "2018"
 description = "Remove bad lines from large CSV files and normalize the rest"
 license = "MIT/Apache-2.0"
 readme = "README.md"
-repository = "https://github.com/faradayio/scrubcsv"
-homepage = "https://github.com/faradayio/scrubcsv"
+repository = "https://github.com/faradayio/csv-tools"
+homepage = "https://github.com/faradayio/csv-tools/tree/main/scrubcsv"
 
 [dependencies]
 clap = { version = "2.33.0", features = ["wrap_help"] }
