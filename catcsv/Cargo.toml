@@ -1,6 +1,6 @@
 [package]
 name = "catcsv"
-version = "0.1.1"
+version = "1.0.0"
 authors = ["Eric Kidd <git@randomhacks.net>"]
 edition = "2018"
 

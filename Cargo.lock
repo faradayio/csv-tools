@@ -87,7 +87,7 @@ dependencies = [
 
 [[package]]
 name = "catcsv"
-version = "0.1.1"
+version = "1.0.0"
 dependencies = [
  "cli_test_dir",
  "csv",
