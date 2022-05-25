@@ -445,7 +445,7 @@ dependencies = [
 
 [[package]]
 name = "scrubcsv"
-version = "0.1.9"
+version = "1.0.0"
 dependencies = [
  "clap",
  "cli_test_dir",
