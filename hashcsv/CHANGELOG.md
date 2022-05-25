@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.1] - 2022-05-25
 
-### Changed
+### Added
 
 - Build new binaries, including Mac M1.
 
