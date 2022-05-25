@@ -1,6 +1,6 @@
 [package]
 name = "hashcsv"
-version = "1.0.0"
+version = "1.0.1"
 authors = ["Eric Kidd <git@randomhacks.net>"]
 edition = "2018"
 description = "Append an `id` column to each row of a CSV file, containing a UUID v5 hash of the row"
