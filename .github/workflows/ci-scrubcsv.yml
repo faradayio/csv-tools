@@ -9,7 +9,6 @@ on:
     # Build anything with an appropriate release tag.
     tags: ["scrubcsv_*"]
     paths:
-      - "Cargo.lock"
       - "build-release"
       - ".github/workflows/ci-scrubcsv.yml"
       - "scrubcsv/**"
@@ -17,7 +16,6 @@ on:
     # Only run on pull requests against master.
     branches: [main]
     paths:
-      - "Cargo.lock"
       - "build-release"
       - ".github/workflows/ci-scrubcsv.yml"
       - "scrubcsv/**"
