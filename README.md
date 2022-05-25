@@ -15,7 +15,8 @@ In general, this repository should contain standard modern Rust code, formatting
 
 These tools were written over several years, and they represent a history of Rust at Faraday. The following dependencies should be replaced if we get the chance:
 
-- `docopt`: Replace with `structopt`.
+- `structopt`: Upgrade to the lastest `clap`, which includes it.
+- `docopt`: Replace with `clap`'s new `structopt` support.
 - `error_chain` and `failure`: Replace with `anyhow` (plus `thiserror` if we need specific custom error types).
 
 In general, it's a good idea to update any older code to match the newest code.
