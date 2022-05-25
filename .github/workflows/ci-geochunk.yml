@@ -1,0 +1,125 @@
+name: CI for geochunk
+
+# Controls when the action will run. Triggers the workflow on push or pull request
+# events but only for the master branch
+on:
+  push:
+    # Run on the master branch.
+    branches: [main]
+    # Build anything with an appropriate release tag.
+    tags: ["geochunk_*"]
+    paths:
+      - "build-release"
+      - ".github/workflows/ci-geochunk.yml"
+      - "geochunk/**"
+  pull_request:
+    # Only run on pull requests against master.
+    branches: [main]
+    paths:
+      - "build-release"
+      - ".github/workflows/ci-geochunk.yml"
+      - "geochunk/**"
+
+defaults:
+  run:
+    # Run all steps in this working directory.
+    working-directory: geochunk
+
+jobs:
+  # We run this job first, to create any GitHub release that we might need.
+  # Creating a release can only be done once, so we need to split it out from
+  # other jobs.
+  create_release:
+    name: Create release (if needed)
+    runs-on: ubuntu-latest
+    outputs:
+      release_version: ${{ steps.extract_release_version.outputs.release_version }}
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+      - name: Extract release version
+        id: extract_release_version
+        run: |
+          release_version="$(echo '${{ github.ref }}' | sed 's,^.*/\([^/]*\),\1,; s,^geochunk_,,; s,^v,,' )"
+          echo Release version: $release_version
+          echo "::set-output name=release_version::$release_version"
+      - name: Extract release body from CHANGELOG.md
+        id: extract_release_body
+        if: ${{ startsWith(github.ref, 'refs/tags/geochunk_') }}
+        # Use `clparse` to parse `CHANGELOG.md` and extract release notes.
+        run: |
+          curl -sLO https://github.com/marcaddeo/clparse/releases/download/0.8.0/clparse-0.8.0-x86_64-unknown-linux-musl.tar.gz
+          tar xzf clparse*.tar.gz
+          sudo cp clparse /usr/local/bin
+          rm -rf clparse*
+          clparse -f json CHANGELOG.md | \
+            jq ".releases[] | select(.version == \"${{ steps.extract_release_version.outputs.release_version }}\") | { title: \"\", description: \"\", releases: [.] }" | \
+            clparse - | \
+            tail -n +3 > RELEASE_BODY.md
+      - name: "Make release"
+        id: create_release
+        if: ${{ startsWith(github.ref, 'refs/tags/geochunk_') }}
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: "geochunk ${{ steps.extract_release_version.outputs.release_version }}"
+          body_path: geochunk/RELEASE_BODY.md
+
+  # We use a matrix to run our build on every supported platform.
+  build:
+    needs:
+      - create_release
+
+    strategy:
+      matrix:
+        # target: Official name of system to compile for.
+        # host: Official name of system doing the compiling.
+        # cargo: Should we use regular cargo, or the cross wrapper for cross-compiling?
+        # os: GitHub CI OS image to use on runner.
+        include:
+          - target: x86_64-unknown-linux-musl
+            host: x86_64-unknown-linux-musl
+            cargo: cross
+            os: ubuntu-latest
+          - target: x86_64-apple-darwin
+            host: x86_64-apple-darwin
+            cargo: cargo
+            os: macos-latest
+          - target: aarch64-apple-darwin
+            host: x86_64-apple-darwin
+            cargo: cargo
+            os: macos-latest
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          # We track latest stable Rust instead of hardcoding it because it
+          # virtually never breaks old code.
+          toolchain: stable
+          components: rustfmt, clippy
+          target: ${{ matrix.target }}
+      - uses: actions/checkout@v2
+      - name: Test and build release
+        id: build_release
+        working-directory: .
+        run: |
+          export RELEASE_VERSION="${{ needs.create_release.outputs.release_version }}"
+          ./build-release geochunk ${{ matrix.target }} ${{ matrix.host }} ${{ matrix.cargo }}
+          echo "::set-output name=release_file::$(echo geochunk_*.zip)"
+      - name: Upload Release Asset
+        if: ${{ startsWith(github.ref, 'refs/tags/geochunk_') }}
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create_release.outputs.upload_url }}
+          asset_path: ./${{ steps.build_release.outputs.release_file }}
+          asset_name: ${{ steps.build_release.outputs.release_file }}
+          asset_content_type: application/zip
