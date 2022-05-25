@@ -6,7 +6,7 @@ use csv::ByteRecord;
 use humansize::{file_size_opts, FileSize};
 use lazy_static::lazy_static;
 use log::debug;
-use regex::bytes::Regex;
+use regex::{bytes::Regex as BytesRegex, Regex};
 use std::{
     borrow::Cow,
     fs,
@@ -18,14 +18,14 @@ use std::{
 use structopt::StructOpt;
 
 // Modules defined in separate files.
+mod clean_column_names;
 #[macro_use]
 mod errors;
-mod uniquifier;
 mod util;
 
 // Import from our own crates.
+use crate::clean_column_names::ColumnNameCleanerType;
 use crate::errors::*;
-use crate::uniquifier::Uniquifier;
 use crate::util::CharSpecifier;
 
 /// Use reasonably large input and output buffers. This seems to give us a
@@ -81,10 +81,17 @@ struct Opt {
     #[structopt(long = "trim-whitespace")]
     trim_whitespace: bool,
 
-    /// Make sure column names are unique, and use only lowercase letters, numbers
-    /// and underscores.
-    #[structopt(long = "clean-column-names")]
-    clean_column_names: bool,
+    /// Make sure column names are unique, and use only lowercase letters,
+    /// numbers and underscores. "unique" (the default) will assign number
+    /// prefixes to make names unique. "stable" will use a simple, predictable
+    /// mapping, and fail with an error if the resulting names are not unique.
+    #[structopt(value_name = "CLEANER_TYPE", long = "clean-column-names")]
+    clean_column_names: Option<Option<ColumnNameCleanerType>>,
+
+    /// Fail if the output CSV file would contain any column names matching the
+    /// specified regular expression.
+    #[structopt(long = "reserve-column-names")]
+    reserve_column_names: Option<Regex>,
 
     /// Drop any rows where the specified column is empty or NULL. Can be passed
     /// more than once. Useful for cleaning primary key columns before
@@ -102,10 +109,21 @@ struct Opt {
     quote: CharSpecifier,
 }
 
+impl Opt {
+    /// Get the value of `clean_column_names`, defaulting as necessary.
+    fn column_name_cleaner_type(&self) -> Option<ColumnNameCleanerType> {
+        match self.clean_column_names {
+            Some(Some(cleaner_type)) => Some(cleaner_type),
+            Some(None) => Some(ColumnNameCleanerType::Unique),
+            None => None,
+        }
+    }
+}
+
 lazy_static! {
     /// Either a CRLF newline, a LF newline, or a CR newline. Any of these
     /// will break certain CSV parsers, including BigQuery's CSV importer.
-    static ref NEWLINE_RE: Regex = Regex::new(r#"\n|\r\n?"#)
+    static ref NEWLINE_RE: BytesRegex = BytesRegex::new(r#"\n|\r\n?"#)
         .expect("regex in source code is unparseable");
 }
 
@@ -127,7 +145,7 @@ fn run() -> Result<()> {
     let null_re = if let Some(null_re_str) = opt.null.as_ref() {
         // Always match the full CSV value.
         let s = format!("^{}$", null_re_str);
-        let re = Regex::new(&s).context("can't compile regular expression")?;
+        let re = BytesRegex::new(&s).context("can't compile regular expression")?;
         Some(re)
     } else {
         None
@@ -188,13 +206,21 @@ fn run() -> Result<()> {
         .byte_headers()
         .context("cannot read headers")?
         .to_owned();
-    if opt.clean_column_names {
-        let mut uniquifier = Uniquifier::default();
+    if let Some(cleaner_type) = opt.column_name_cleaner_type() {
+        let mut cleaner = cleaner_type.build_cleaner();
         let mut new_hdr = ByteRecord::default();
         for col in hdr.into_iter() {
             // Convert from bytes to UTF-8, make unique (and clean), and convert back to bytes.
             let col = String::from_utf8_lossy(col);
-            let col = uniquifier.unique_id_for(&col)?.to_owned();
+            let col = cleaner.unique_id_for(&col)?.to_owned();
+            if let Some(reserved_re) = &opt.reserve_column_names {
+                if reserved_re.is_match(&col[..]) {
+                    return Err(format_err!(
+                        "file used reserved column name {:?}",
+                        col
+                    ));
+                }
+            }
             new_hdr.push_field(col.as_bytes());
         }
         hdr = new_hdr;
@@ -266,7 +292,7 @@ fn run() -> Result<()> {
             let cleaned = record.into_iter().map(|mut val: &[u8]| -> Cow<'_, [u8]> {
                 // Convert values matching `--null` regex to empty strings.
                 if let Some(ref null_re) = null_re {
-                    if null_re.is_match(&val) {
+                    if null_re.is_match(val) {
                         val = &[]
                     }
                 }

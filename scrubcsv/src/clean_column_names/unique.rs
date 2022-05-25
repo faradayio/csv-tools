@@ -5,7 +5,8 @@
 
 use std::collections::HashSet;
 
-use crate::Result;
+use super::ColumnNameCleaner;
+use crate::{format_err, Result};
 
 /// Turns arbitrary Unicode names into unique, lowercase ASCII identifiers. All
 /// identifiers start with an underscore or a lowercase ASCII letter, followed
@@ -16,22 +17,18 @@ pub(crate) struct Uniquifier {
     used: HashSet<String>,
 }
 
-impl Uniquifier {
-    /// Given a `name`, return an idenfitier
-    pub(crate) fn unique_id_for<'a>(&mut self, name: &'a str) -> Result<&str> {
+impl ColumnNameCleaner for Uniquifier {
+    fn unique_id_for(&mut self, name: &str) -> Result<String> {
         let id = name_to_lowercase_id(name);
         if self.used.insert(id.to_owned()) {
-            Ok(&self.used.get(&id).expect("just verified id was present")[..])
+            Ok(id)
         } else {
             let mut offset = 1;
             while offset < 50 {
                 offset += 1;
                 let alt_id = format!("{}_{}", id, offset);
                 if self.used.insert(alt_id.to_owned()) {
-                    return Ok(&self
-                        .used
-                        .get(&alt_id)
-                        .expect("just verified alt_id was present")[..]);
+                    return Ok(alt_id);
                 }
             }
             Err(format_err!("too many column name collisions"))

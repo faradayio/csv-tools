@@ -1,4 +1,4 @@
-name: CI for hashcsv
+name: CI for scrubcsv
 
 # Controls when the action will run. Triggers the workflow on push or pull request
 # events but only for the master branch
@@ -7,25 +7,25 @@ on:
     # Run on the master branch.
     branches: [main]
     # Build anything with an appropriate release tag.
-    tags: ["hashcsv_*"]
+    tags: ["scrubcsv_*"]
     paths:
       - "Cargo.lock"
       - "build-release"
-      - ".github/workflows/ci-hashcsv.yml"
-      - "hashcsv/**"
+      - ".github/workflows/ci-scrubcsv.yml"
+      - "scrubcsv/**"
   pull_request:
     # Only run on pull requests against master.
     branches: [main]
     paths:
       - "Cargo.lock"
       - "build-release"
-      - ".github/workflows/ci-hashcsv.yml"
-      - "hashcsv/**"
+      - ".github/workflows/ci-scrubcsv.yml"
+      - "scrubcsv/**"
 
 defaults:
   run:
     # Run all steps in this working directory.
-    working-directory: hashcsv
+    working-directory: scrubcsv
 
 jobs:
   # We run this job first, to create any GitHub release that we might need.
@@ -43,12 +43,12 @@ jobs:
       - name: Extract release version
         id: extract_release_version
         run: |
-          release_version="$(echo '${{ github.ref }}' | sed 's,^.*/\([^/]*\),\1,; s,^hashcsv_,,; s,^v,,' )"
+          release_version="$(echo '${{ github.ref }}' | sed 's,^.*/\([^/]*\),\1,; s,^scrubcsv_,,; s,^v,,' )"
           echo Release version: $release_version
           echo "::set-output name=release_version::$release_version"
       - name: Extract release body from CHANGELOG.md
         id: extract_release_body
-        if: ${{ startsWith(github.ref, 'refs/tags/hashcsv_') }}
+        if: ${{ startsWith(github.ref, 'refs/tags/scrubcsv_') }}
         # Use `clparse` to parse `CHANGELOG.md` and extract release notes.
         run: |
           curl -sLO https://github.com/marcaddeo/clparse/releases/download/0.8.0/clparse-0.8.0-x86_64-unknown-linux-musl.tar.gz
@@ -61,14 +61,14 @@ jobs:
             tail -n +3 > RELEASE_BODY.md
       - name: "Make release"
         id: create_release
-        if: ${{ startsWith(github.ref, 'refs/tags/hashcsv_') }}
+        if: ${{ startsWith(github.ref, 'refs/tags/scrubcsv_') }}
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ github.ref }}
-          release_name: "hashcsv ${{ steps.extract_release_version.outputs.release_version }}"
-          body_path: hashcsv/RELEASE_BODY.md
+          release_name: "scrubcsv ${{ steps.extract_release_version.outputs.release_version }}"
+          body_path: scrubcsv/RELEASE_BODY.md
 
   # We use a matrix to run our build on every supported platform.
   build:
@@ -113,10 +113,10 @@ jobs:
         working-directory: .
         run: |
           export RELEASE_VERSION="${{ needs.create_release.outputs.release_version }}"
-          ./build-release hashcsv ${{ matrix.target }} ${{ matrix.host }} ${{ matrix.cargo }}
-          echo "::set-output name=release_file::$(echo hashcsv_*.zip)"
+          ./build-release scrubcsv ${{ matrix.target }} ${{ matrix.host }} ${{ matrix.cargo }}
+          echo "::set-output name=release_file::$(echo scrubcsv_*.zip)"
       - name: Upload Release Asset
-        if: ${{ startsWith(github.ref, 'refs/tags/hashcsv_') }}
+        if: ${{ startsWith(github.ref, 'refs/tags/scrubcsv_') }}
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

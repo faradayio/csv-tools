@@ -173,14 +173,61 @@ fn trim_whitespace() {
 }
 
 #[test]
-fn clean_column_names() {
-    let testdir = TestDir::new("scrubcsv", "clean_column_names");
+fn clean_column_names_unique() {
+    let testdir = TestDir::new("scrubcsv", "clean_column_names_unique");
     let output = testdir
         .cmd()
         .arg("--clean-column-names")
         .output_with_stdin(",,a,a\n")
         .expect_success();
     assert_eq!(output.stdout_str(), "_,__2,a,a_2\n");
+}
+
+#[test]
+fn clean_column_names_stable() {
+    let testdir = TestDir::new("scrubcsv", "clean_column_names_stable");
+    let output = testdir
+        .cmd()
+        .arg("--clean-column-names=stable")
+        .output_with_stdin("a,B,C d\n")
+        .expect_success();
+    assert_eq!(output.stdout_str(), "a,b,c_d\n");
+}
+
+#[test]
+fn clean_column_names_stable_rejects_certain_names() {
+    let testdir = TestDir::new(
+        "scrubcsv",
+        "clean_column_names_stable_rejects_certain_names",
+    );
+
+    let invalid_column_names = &[
+        ("a,\n", "invalid column name"),
+        ("1\n", "invalid column name"),
+        ("A,a\n", "conflicting column names"),
+        ("A b,a_b", "conflicting column names"),
+    ];
+
+    for &(names, err) in invalid_column_names {
+        let output = testdir
+            .cmd()
+            .arg("--clean-column-names=stable")
+            .output_with_stdin(names)
+            .expect_failure();
+        assert!(output.stderr_str().contains(err));
+    }
+}
+
+#[test]
+fn reserve_column_names() {
+    let testdir = TestDir::new("scrubcsv", "clean_column_names_stable");
+    let output = testdir
+        .cmd()
+        .arg("--clean-column-names=stable")
+        .arg("--reserve-column-names=^reserved_")
+        .output_with_stdin("a,Reserved Name\n")
+        .expect_failure();
+    assert!(output.stderr_str().contains("reserved column name"));
 }
 
 #[test]

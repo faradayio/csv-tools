@@ -2,53 +2,55 @@
 #
 # Usage: ./build-release <PROJECT>
 #
-# The latest version of this script is available at
-# https://github.com/emk/rust-musl-builder/blob/master/examples/build-release
+# Called by CI to verify the source tree is ready for release, and to build
+# release binaries. We use 'cross' where necessary for cross-platform builds.
 #
-# Called by `.travis.yml` to build release binaries.  We use
-# ekidd/rust-musl-builder to make the Linux binaries so that we can run
-# them unchanged on any distro, including tiny distros like Alpine (which
-# is heavily used for Docker containers).  Other platforms get regular
-# binaries, which will generally be dynamically linked against libc.
-#
-# If you have a platform which supports static linking of libc, and this
-# would be generally useful, please feel free to submit patches.
+# We keep all this logic in a separate script so we don't need to duplicate it
+# in every CI file.
 
 set -euo pipefail
 
 # Command-line arguments.
 PKG_NAME="$1"
-BIN_NAME="$1"
+BIN_NAME="$PKG_NAME"
+TARGET="$2"
+HOST="$3"
+CARGO_COMMAND="$4"
 
 # This is either a tag, or possibly something like refs/heads/feature-branch-1.
 # The important thing is that we remove all slashes.
 VERSION="$RELEASE_VERSION"
 
-# Ask GCC for a triplet like "x86_64-linux-gnu".
-TRIPLET="$(gcc -dumpmachine)"
+# Install 'cargo deny'.
+echo "Installing cargo-deny"
+cargo_deny_version=0.12.1
+cargo_deny_basename=cargo-deny-$cargo_deny_version-$HOST
+curl -fLO https://github.com/EmbarkStudios/cargo-deny/releases/download/$cargo_deny_version/$cargo_deny_basename.tar.gz
+tar xf $cargo_deny_basename.tar.gz
+mv $cargo_deny_basename/cargo-deny /usr/local/bin/
+rm -rf $cargo_deny_basename $cargo_deny_basename.tar.gz
 
-cd "$PKG_NAME"
+# Perform standard checks and tests.
+echo "Verifying code is ready for release"
+cargo deny check
+cargo fmt -- --check
+cargo clippy -- -D warnings
+cargo test --package "$PKG_NAME"
 
-case `uname -s` in
-    Linux)
-        echo "Building static binaries using ekidd/rust-musl-builder"
-        # Build one directory up to make sure we can see our YAML.
-        docker build -t build-"$PKG_NAME"-image -f Dockerfile ..
-        docker run --name build-"$PKG_NAME" build-"$PKG_NAME"-image
-        mkdir -p dist
-        docker cp build-"$PKG_NAME":/home/rust/src/target/x86_64-unknown-linux-musl/release/"$BIN_NAME" dist/"$BIN_NAME"
-        docker rm build-"$PKG_NAME"
-        docker rmi build-"$PKG_NAME"-image
-        zip -j ../"$PKG_NAME"-v"$VERSION"-"$TRIPLET".zip dist/"$PKG_NAME"
-        rm -rf dist/
-        ;;
-    Darwin)
-        echo "Building standard release binaries"
-        cargo build --release
-        zip -j ../"$PKG_NAME"-v"$VERSION"-"$TRIPLET"-osx.zip ../target/release/"$BIN_NAME"
-        ;;
-    *)
-        echo "Unknown platform" 2>&1
-        exit 1
-        ;;
-esac
+# Install cross if needed.
+if [ "$CARGO_COMMAND" = "cross" ]; then
+    echo "Installing cross for cross-compilation"
+    cross_version=v0.2.1
+    cross_basename=cross-$cross_version-$HOST
+    curl -fLO https://github.com/rust-embedded/cross/releases/download/$cross_version/$cross_basename.tar.gz
+    tar xf $cross_basename.tar.gz
+    mv cross /usr/local/bin/
+    rm -rf $cross_basename.tar.gz
+fi
+
+# Build our binaries.
+echo "Building binaries using $CARGO_COMMAND"
+$CARGO_COMMAND build --package "$PKG_NAME" --release --target "$TARGET"
+
+# Package binaries.
+zip -j "$PKG_NAME"_"$VERSION"_"$TARGET".zip target/"$TARGET"/release/"$BIN_NAME"

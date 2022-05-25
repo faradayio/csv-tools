@@ -24,3 +24,15 @@ deny = ["AGPL-3.0"]
 [bans]
 # Do we want to know about multiple versions of the same dependency?
 multiple-versions = "allow"
+
+deny = [
+    # Tools using Postgres C libraries are not permitted in this repository,
+    # because they require special build machinery that this repository does
+    # not support.
+    { name = "libpq-sys" },
+
+    # OpenSSL has caused endless deployment and build problems, and we want
+    # nothing to do with it. It is definitely not permitted in this repository,
+    # because our build system does not support it.
+    { name = "openssl-sys" },
+]
