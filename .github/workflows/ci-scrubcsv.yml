@@ -5,7 +5,9 @@ name: CI for scrubcsv
 on:
   push:
     # Run on the master branch.
-    branches: [main]
+    branches:
+      - main
+      - ci_*
     # Build anything with an appropriate release tag.
     tags: ["scrubcsv_*"]
     paths:
@@ -92,6 +94,10 @@ jobs:
             host: x86_64-apple-darwin
             cargo: cargo
             os: macos-latest
+          - target: x86_64-pc-windows-gnu
+            host: x86_64-unknown-linux-musl
+            cargo: cross
+            os: ubuntu-latest
 
     runs-on: ${{ matrix.os }}
 
