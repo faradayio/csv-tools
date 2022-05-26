@@ -52,5 +52,11 @@ fi
 echo "Building binaries using $CARGO_COMMAND"
 $CARGO_COMMAND build --package "$PKG_NAME" --release --target "$TARGET"
 
+# Figure out whether binaries have a file extension.
+case "$TARGET" in
+    *windows*) bin_ext=.exe ;;
+    *) bin_ext= ;;
+esac
+
 # Package binaries.
-zip -j "$PKG_NAME"_"$VERSION"_"$TARGET".zip target/"$TARGET"/release/"$BIN_NAME"
+zip -j "$PKG_NAME"_"$VERSION"_"$TARGET".zip target/"$TARGET"/release/"$BIN_NAME"$bin_ext
