@@ -4,7 +4,7 @@ name: CI for catcsv
 # events but only for the master branch
 on:
   push:
-    # Run on the master branch.
+    # Run on the main branch.
     branches: [main]
     # Build anything with an appropriate release tag.
     tags: ["catcsv_*"]
@@ -13,7 +13,7 @@ on:
       - ".github/workflows/ci-catcsv.yml"
       - "catcsv/**"
   pull_request:
-    # Only run on pull requests against master.
+    # Only run on pull requests against the main branch.
     branches: [main]
     paths:
       - "build-release"
@@ -92,6 +92,10 @@ jobs:
             host: x86_64-apple-darwin
             cargo: cargo
             os: macos-latest
+          - target: x86_64-pc-windows-gnu
+            host: x86_64-unknown-linux-musl
+            cargo: cross
+            os: ubuntu-latest
 
     runs-on: ${{ matrix.os }}
 
