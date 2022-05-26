@@ -4,10 +4,8 @@ name: CI for scrubcsv
 # events but only for the master branch
 on:
   push:
-    # Run on the master branch.
-    branches:
-      - main
-      - ci_*
+    # Run on the main branch.
+    branches: [main]
     # Build anything with an appropriate release tag.
     tags: ["scrubcsv_*"]
     paths:
@@ -15,7 +13,7 @@ on:
       - ".github/workflows/ci-scrubcsv.yml"
       - "scrubcsv/**"
   pull_request:
-    # Only run on pull requests against master.
+    # Only run on pull requests against the main branch.
     branches: [main]
     paths:
       - "build-release"
