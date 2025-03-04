@@ -93,6 +93,14 @@ struct Opt {
     #[structopt(long = "reserve-column-names")]
     reserve_column_names: Option<Regex>,
 
+    /// Allow selecting columns by name. Should be submitted as a CSV list of column names.
+    /// If not specified, all columns will be included.
+    /// Column names should be specified in their final form, after any cleaning.
+    /// So if you pass `--clean-column-names=stable`, and your original column name is "Column Name",
+    /// you should pass "column_name" here.
+    #[structopt(long = "select-columns")]
+    select_columns: Option<String>,
+
     /// Drop any rows where the specified column is empty or NULL. Can be passed
     /// more than once. Useful for cleaning primary key columns before
     /// upserting. Uses the cleaned form of column names.
@@ -226,12 +234,74 @@ fn run() -> Result<()> {
         hdr = new_hdr;
     }
 
+    // Calculate the number of expected columns read by the reader
+    // Different from the number of columns in the header
+    let expected_cols = hdr.len();
+
+    // If we have a list of columns to select, filter the header to only include those columns.
+    // Also create a Vec<bool> to track which columns to keep for later processing
+    let mut selected_cols = None;
+    // And store the length of the selected columns for later use
+    let mut selected_col_len = 0;
+
+    if let Some(ref select_columns) = opt.select_columns {
+        let mut select_columns_rdr = csv::ReaderBuilder::new()
+            .has_headers(false)
+            .from_reader(select_columns.as_bytes());
+
+        let selected_columns_vec: Vec<String> = match select_columns_rdr
+            .records()
+            .next()
+        {
+            Some(Ok(record)) => record.iter().map(|s| s.to_string()).collect(),
+            Some(Err(_)) => {
+                return Err(format_err!("The provided CSV of headers is invalid."));
+            }
+            None => {
+                return Err(format_err!("The provided CSV of headers is empty."));
+            }
+        };
+
+        // You might have submitted a single newline
+        if selected_columns_vec.is_empty() {
+            return Err(format_err!("The provided CSV of headers is empty."));
+        }
+
+        // Now we make sure that all of the selected columns are in the header
+        for col in selected_columns_vec.iter() {
+            if !hdr
+                .iter()
+                .any(|h| &String::from_utf8_lossy(h).to_string() == col)
+            {
+                return Err(format_err!(
+                    "The provided CSV of headers does not contain the column {:?}",
+                    col
+                ));
+            }
+        }
+
+        selected_col_len = selected_columns_vec.len();
+        let mut new_hdr = ByteRecord::default();
+        let mut new_selected_cols = Vec::with_capacity(selected_col_len);
+        for col in hdr.iter() {
+            let col_str = String::from_utf8_lossy(col);
+            let keep = selected_columns_vec.contains(&col_str.to_string());
+            debug!(
+                "column: {:?}, keep: {}, comparing against: {:?}",
+                col_str, keep, select_columns
+            );
+            new_selected_cols.push(keep);
+            if keep {
+                new_hdr.push_field(col);
+            }
+        }
+        hdr = new_hdr;
+        selected_cols = Some(new_selected_cols);
+    }
+
     // Write our header to our output.
     wtr.write_byte_record(&hdr)
         .context("cannot write headers")?;
-
-    // Calculate the number of expected columns.
-    let expected_cols = hdr.len();
 
     // Just in case --drop-row-if-null was passed, precompute which columns are
     // required to contain a value.
@@ -255,6 +325,7 @@ fn run() -> Result<()> {
     let use_fast_path = null_re.is_none()
         && !opt.replace_newlines
         && !opt.trim_whitespace
+        && opt.select_columns.is_none()
         && opt.drop_row_if_null.is_empty();
 
     // Iterate over all the rows, checking to make sure they look reasonable.
@@ -289,7 +360,21 @@ fn run() -> Result<()> {
                 .context("cannot write record")?;
         } else {
             // We need to apply one or more cleanups, so run the slow path.
-            let cleaned = record.into_iter().map(|mut val: &[u8]| -> Cow<'_, [u8]> {
+            // Process each column, but only keep selected columns if specified
+            let mut cleaned = if !selected_cols.is_none() {
+                Vec::with_capacity(selected_col_len)
+            } else {
+                Vec::with_capacity(record.len())
+            };
+
+            for (i, mut val) in record.into_iter().enumerate() {
+                // Skip this column if it's not in the selected columns
+                if let Some(ref selected_cols) = selected_cols {
+                    if !selected_cols[i] {
+                        continue;
+                    } else {
+                    }
+                }
                 // Convert values matching `--null` regex to empty strings.
                 if let Some(ref null_re) = null_re {
                     if null_re.is_match(val) {
@@ -317,21 +402,23 @@ fn run() -> Result<()> {
                 }
 
                 // Fix newlines.
-                if opt.replace_newlines
+                let processed_val = if opt.replace_newlines
                     && (val.contains(&b'\n') || val.contains(&b'\r'))
                 {
                     NEWLINE_RE.replace_all(val, &b" "[..])
                 } else {
                     Cow::Borrowed(val)
-                }
-            });
+                };
+
+                cleaned.push(processed_val);
+            }
             if opt.drop_row_if_null.is_empty() {
                 // Still somewhat fast!
                 wtr.write_record(cleaned).context("cannot write record")?;
             } else {
                 // We need to rebuild the record, check for null columns,
                 // and only output the record if everything's OK.
-                let row = cleaned.collect::<Vec<Cow<'_, [u8]>>>();
+                let row = &cleaned; // Use the cleaned Vec directly
                 for (value, &is_required_col) in row.iter().zip(required_cols.iter()) {
                     // If the column is NULL but shouldn't be, bail on this row.
                     if is_required_col && value.is_empty() {

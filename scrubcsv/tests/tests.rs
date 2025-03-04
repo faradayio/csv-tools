@@ -256,3 +256,44 @@ a,b,c
 "#
     );
 }
+
+#[test]
+fn select_columns() {
+    let testdir = TestDir::new("scrubcsv", "select_columns");
+    let output = testdir
+        .cmd()
+        .arg("--select-columns=c1,c3")
+        .output_with_stdin(
+            r#"c1,c2,c3
+a,b,c
+d,e,f
+g,h,i
+"#,
+        )
+        .expect("error running scrubcsv");
+    eprintln!("{}", output.stderr_str());
+    assert_eq!(
+        output.stdout_str(),
+        r#"c1,c3
+a,c
+d,f
+g,i
+"#
+    );
+}
+
+#[test]
+fn select_columns_error_if_selected_columns_are_not_in_header() {
+    let testdir = TestDir::new(
+        "scrubcsv",
+        "select_columns_error_if_selected_columns_are_not_in_header",
+    );
+    let output = testdir
+        .cmd()
+        .arg("--select-columns=a,b")
+        .output_with_stdin(r#"c1,c2,c3"#)
+        .expect_failure();
+    assert!(output
+        .stderr_str()
+        .contains("The provided CSV of headers does not contain the column \"a\""));
+}
