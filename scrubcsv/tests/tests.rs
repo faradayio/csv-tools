@@ -47,7 +47,7 @@ fn stdin_and_delimiter_and_quiet() {
     let testdir = TestDir::new("scrubcsv", "stdin_and_delimiter_and_quiet");
     let output = testdir
         .cmd()
-        .args(&["-d", "|"])
+        .args(["-d", "|"])
         .arg("-q")
         .output_with_stdin(
             "\
@@ -78,8 +78,8 @@ a\tb\tc
     );
     let output = testdir
         .cmd()
-        .args(&["-d", r"\t"])
-        .args(&["--quote", "none"])
+        .args(["-d", r"\t"])
+        .args(["--quote", "none"])
         .arg("in.csv")
         .expect_success();
     assert_eq!(
@@ -133,7 +133,7 @@ fn null_normalization() {
     let testdir = TestDir::new("scrubcsv", "null_normalization");
     let output = testdir
         .cmd()
-        .args(&["--null", "(?i)null|NIL"])
+        .args(["--null", "(?i)null|NIL"])
         .output_with_stdin("a,b,c,d,e\nnull,NIL,nil,,not null\n")
         .expect_success();
     assert_eq!(output.stdout_str(), "a,b,c,d,e\n,,,,not null\n")
@@ -144,7 +144,7 @@ fn null_normalization_of_null_bytes() {
     let testdir = TestDir::new("scrubcsv", "null_normalization_of_null_bytes");
     let output = testdir
         .cmd()
-        .args(&["--null", "\\x00"])
+        .args(["--null", "\\x00"])
         .output_with_stdin("a,b\n\0,\n")
         .expect_success();
     assert_eq!(output.stdout_str(), "a,b\n,\n")
@@ -237,7 +237,7 @@ fn drop_row_if_null() {
         .cmd()
         .arg("--drop-row-if-null=c1")
         .arg("--drop-row-if-null=c2")
-        .args(&["--null", "NULL"])
+        .args(["--null", "NULL"])
         .output_with_stdin(
             r#"c1,c2,c3
 1,,
@@ -255,4 +255,88 @@ a,b,c
 a,b,c
 "#
     );
+}
+
+#[test]
+fn select_columns() {
+    let testdir = TestDir::new("scrubcsv", "select_columns");
+    let output = testdir
+        .cmd()
+        .arg("--select-columns=c1,c3")
+        .output_with_stdin(
+            r#"c1,c2,c3
+a,b,c
+d,e,f
+g,h,i
+"#,
+        )
+        .expect("error running scrubcsv");
+    eprintln!("{}", output.stderr_str());
+    assert_eq!(
+        output.stdout_str(),
+        r#"c1,c3
+a,c
+d,f
+g,i
+"#
+    );
+}
+
+#[test]
+fn select_columns_error_if_selected_columns_are_not_in_header() {
+    let testdir = TestDir::new(
+        "scrubcsv",
+        "select_columns_error_if_selected_columns_are_not_in_header",
+    );
+    let output = testdir
+        .cmd()
+        .arg("--select-columns=a,b")
+        .output_with_stdin(r#"c1,c2,c3"#)
+        .expect_failure();
+    assert!(output
+        .stderr_str()
+        .contains("The provided CSV of headers does not contain the column \"a\""));
+}
+
+#[test]
+fn select_columns_respects_order() {
+    let testdir = TestDir::new("scrubcsv", "select_columns");
+    let output = testdir
+        .cmd()
+        .arg("--select-columns=c5,c2,c4")
+        .output_with_stdin(
+            r#"c1,c2,c3,c4,c5
+c1-1,c2-1,c3-1,c4-1,c5-1
+c1-2,c2-2,c3-2,c4-2,c5-2
+c1-3,c2-3,c3-3,c4-3,c5-3
+"#,
+        )
+        .expect("error running scrubcsv");
+    assert_eq!(
+        output.stdout_str(),
+        r#"c5,c2,c4
+c5-1,c2-1,c4-1
+c5-2,c2-2,c4-2
+c5-3,c2-3,c4-3
+"#
+    );
+}
+
+#[test]
+fn select_columns_handles_duplicate_selected_columns() {
+    let testdir = TestDir::new("scrubcsv", "select_columns");
+    let output = testdir
+        .cmd()
+        .arg("--select-columns=c5,c5,c4")
+        .output_with_stdin(
+            r#"c1,c2,c3,c4,c5
+c1-1,c2-1,c3-1,c4-1,c5-1
+c1-2,c2-2,c3-2,c4-2,c5-2
+c1-3,c2-3,c3-3,c4-3,c5-3
+"#,
+        )
+        .expect_failure();
+    assert!(output
+        .stderr_str()
+        .contains("--select-columns cannot contain duplicate column names"));
 }
