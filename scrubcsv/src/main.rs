@@ -242,7 +242,11 @@ fn run() -> Result<()> {
     // Also create a Vec<bool> to track which columns to keep for later processing
     let mut selected_cols = None;
     // And store the length of the selected columns for later use
-    let mut selected_col_len = 0;
+    let mut selected_cols_len = 0;
+    // Store if we need to reorder the columns
+    let mut selected_cols_require_reordering = false;
+    // Store the order of the selected columns
+    let mut selected_cols_order = None;
 
     if let Some(ref select_columns) = opt.select_columns {
         let mut select_columns_rdr = csv::ReaderBuilder::new()
@@ -280,23 +284,50 @@ fn run() -> Result<()> {
             }
         }
 
-        selected_col_len = selected_columns_vec.len();
-        let mut new_hdr = ByteRecord::default();
-        let mut new_selected_cols = Vec::with_capacity(selected_col_len);
+        // The positions of selected columns in the original header
+        selected_cols_len = selected_columns_vec.len();
+        let mut max_position_seen: i32 = -1;
+        let mut new_selected_cols: Vec<bool> = Vec::with_capacity(selected_cols_len);
+        // make an array of [final_position, original_position]
+        let mut final_to_original_position: Vec<(usize, usize)> =
+            Vec::with_capacity(selected_cols_len);
+        // this is the last time that i will know the original order of the columns (from hdr)
+        let mut original_position = 0;
         for col in hdr.iter() {
             let col_str = String::from_utf8_lossy(col);
-            let keep = selected_columns_vec.contains(&col_str.to_string());
-            debug!(
-                "column: {:?}, keep: {}, comparing against: {:?}",
-                col_str, keep, select_columns
-            );
-            new_selected_cols.push(keep);
-            if keep {
-                new_hdr.push_field(col);
+            match selected_columns_vec
+                .iter()
+                .position(|c| c == &col_str.to_string())
+            {
+                Some(final_position) => {
+                    new_selected_cols.push(true);
+                    final_to_original_position
+                        .push((final_position, original_position));
+                    original_position += 1;
+                    if (final_position as i32) < max_position_seen {
+                        selected_cols_require_reordering = true;
+                    } else {
+                        max_position_seen = final_position as i32;
+                    }
+                }
+                None => new_selected_cols.push(false),
             }
         }
+        // so we'll have a final_to_original_position like { 2 => 1, 1 => 0, 0 => 2 }
+        // crete a "selected_cols_order" vec which has the values ordered by the keys
+        final_to_original_position.sort_by_key(|(k, _)| *k);
+        let new_selected_cols_order: Vec<usize> =
+            final_to_original_position.iter().map(|(_, v)| *v).collect();
+
+        // The new header is the selected columns
+        let mut new_hdr = ByteRecord::default();
+        for col in selected_columns_vec.iter() {
+            new_hdr.push_field(col.as_bytes());
+        }
+
         hdr = new_hdr;
         selected_cols = Some(new_selected_cols);
+        selected_cols_order = Some(new_selected_cols_order);
     }
 
     // Write our header to our output.
@@ -362,7 +393,7 @@ fn run() -> Result<()> {
             // We need to apply one or more cleanups, so run the slow path.
             // Process each column, but only keep selected columns if specified
             let mut cleaned = if !selected_cols.is_none() {
-                Vec::with_capacity(selected_col_len)
+                Vec::with_capacity(selected_cols_len)
             } else {
                 Vec::with_capacity(record.len())
             };
@@ -372,7 +403,6 @@ fn run() -> Result<()> {
                 if let Some(ref selected_cols) = selected_cols {
                     if !selected_cols[i] {
                         continue;
-                    } else {
                     }
                 }
                 // Convert values matching `--null` regex to empty strings.
@@ -411,6 +441,34 @@ fn run() -> Result<()> {
                 };
 
                 cleaned.push(processed_val);
+            }
+            if selected_cols_require_reordering {
+                // https://stackoverflow.com/a/69774341/310192
+                fn sort_by_indices<T>(data: &mut [T], mut indices: Vec<usize>) {
+                    for idx in 0..data.len() {
+                        if indices[idx] != idx {
+                            let mut current_idx = idx;
+                            loop {
+                                let target_idx = indices[current_idx];
+                                indices[current_idx] = current_idx;
+                                if indices[target_idx] == target_idx {
+                                    break;
+                                }
+                                data.swap(current_idx, target_idx);
+                                current_idx = target_idx;
+                            }
+                        }
+                    }
+                }
+
+                // about 25% faster than creating a vector iteratively
+                sort_by_indices(
+                    &mut cleaned,
+                    selected_cols_order
+                        .as_ref()
+                        .expect("selected_cols_order should have a value here")
+                        .clone(),
+                );
             }
             if opt.drop_row_if_null.is_empty() {
                 // Still somewhat fast!
