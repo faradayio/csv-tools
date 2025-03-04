@@ -47,7 +47,7 @@ fn stdin_and_delimiter_and_quiet() {
     let testdir = TestDir::new("scrubcsv", "stdin_and_delimiter_and_quiet");
     let output = testdir
         .cmd()
-        .args(&["-d", "|"])
+        .args(["-d", "|"])
         .arg("-q")
         .output_with_stdin(
             "\
@@ -78,8 +78,8 @@ a\tb\tc
     );
     let output = testdir
         .cmd()
-        .args(&["-d", r"\t"])
-        .args(&["--quote", "none"])
+        .args(["-d", r"\t"])
+        .args(["--quote", "none"])
         .arg("in.csv")
         .expect_success();
     assert_eq!(
@@ -133,7 +133,7 @@ fn null_normalization() {
     let testdir = TestDir::new("scrubcsv", "null_normalization");
     let output = testdir
         .cmd()
-        .args(&["--null", "(?i)null|NIL"])
+        .args(["--null", "(?i)null|NIL"])
         .output_with_stdin("a,b,c,d,e\nnull,NIL,nil,,not null\n")
         .expect_success();
     assert_eq!(output.stdout_str(), "a,b,c,d,e\n,,,,not null\n")
@@ -144,7 +144,7 @@ fn null_normalization_of_null_bytes() {
     let testdir = TestDir::new("scrubcsv", "null_normalization_of_null_bytes");
     let output = testdir
         .cmd()
-        .args(&["--null", "\\x00"])
+        .args(["--null", "\\x00"])
         .output_with_stdin("a,b\n\0,\n")
         .expect_success();
     assert_eq!(output.stdout_str(), "a,b\n,\n")
@@ -237,7 +237,7 @@ fn drop_row_if_null() {
         .cmd()
         .arg("--drop-row-if-null=c1")
         .arg("--drop-row-if-null=c2")
-        .args(&["--null", "NULL"])
+        .args(["--null", "NULL"])
         .output_with_stdin(
             r#"c1,c2,c3
 1,,
@@ -317,12 +317,11 @@ c1-3,c2-3,c3-3,c4-3,c5-3
     eprintln!("{}", output.stdout_str());
     eprintln!("expected");
     eprintln!(
-        "{}",
-        r#"c5,c2,c4
+        "c5,c2,c4
 c5-1,c2-1,c4-1
 c5-2,c2-2,c4-2
 c5-3,c2-3,c4-3
-"#
+"
     );
     assert_eq!(
         output.stdout_str(),

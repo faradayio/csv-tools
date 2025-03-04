@@ -392,7 +392,7 @@ fn run() -> Result<()> {
         } else {
             // We need to apply one or more cleanups, so run the slow path.
             // Process each column, but only keep selected columns if specified
-            let mut cleaned = if !selected_cols.is_none() {
+            let mut cleaned = if selected_cols.is_some() {
                 Vec::with_capacity(selected_cols_len)
             } else {
                 Vec::with_capacity(record.len())
