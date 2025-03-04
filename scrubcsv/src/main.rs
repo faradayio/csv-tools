@@ -9,6 +9,7 @@ use log::debug;
 use regex::{bytes::Regex as BytesRegex, Regex};
 use std::{
     borrow::Cow,
+    collections::HashSet,
     fs,
     io::{self, prelude::*},
     path::PathBuf,
@@ -282,6 +283,12 @@ fn run() -> Result<()> {
                     col
                 ));
             }
+        }
+        let mut seen = HashSet::new();
+        if !selected_columns_vec.iter().all(|x| seen.insert(x)) {
+            return Err(format_err!(
+                "--select-columns cannot contain duplicate column names"
+            ));
         }
 
         // The positions of selected columns in the original header

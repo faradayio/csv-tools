@@ -312,17 +312,6 @@ c1-3,c2-3,c3-3,c4-3,c5-3
 "#,
         )
         .expect("error running scrubcsv");
-    eprintln!("{}", output.stderr_str());
-    eprintln!("got");
-    eprintln!("{}", output.stdout_str());
-    eprintln!("expected");
-    eprintln!(
-        "c5,c2,c4
-c5-1,c2-1,c4-1
-c5-2,c2-2,c4-2
-c5-3,c2-3,c4-3
-"
-    );
     assert_eq!(
         output.stdout_str(),
         r#"c5,c2,c4
@@ -331,4 +320,23 @@ c5-2,c2-2,c4-2
 c5-3,c2-3,c4-3
 "#
     );
+}
+
+#[test]
+fn select_columns_handles_duplicate_selected_columns() {
+    let testdir = TestDir::new("scrubcsv", "select_columns");
+    let output = testdir
+        .cmd()
+        .arg("--select-columns=c5,c5,c4")
+        .output_with_stdin(
+            r#"c1,c2,c3,c4,c5
+c1-1,c2-1,c3-1,c4-1,c5-1
+c1-2,c2-2,c3-2,c4-2,c5-2
+c1-3,c2-3,c3-3,c4-3,c5-3
+"#,
+        )
+        .expect_failure();
+    assert!(output
+        .stderr_str()
+        .contains("--select-columns cannot contain duplicate column names"));
 }
