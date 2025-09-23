@@ -9,8 +9,8 @@ use log::debug;
 use regex::{bytes::Regex as BytesRegex, Regex};
 use std::{
     borrow::Cow,
-    fs,
-    io::{self, prelude::*},
+    fs::{self, File},
+    io::{self, prelude::*, BufWriter},
     path::PathBuf,
     process,
     time::Instant,
@@ -32,6 +32,25 @@ use crate::util::CharSpecifier;
 /// performance boost of around 5-10% compared to the standard 8 KiB buffer used
 /// by `csv`.
 const BUFFER_SIZE: usize = 256 * 1024;
+
+/// Output format for statistics.
+#[derive(Debug, Clone)]
+enum OutputFormat {
+    Json,
+    Text,
+}
+
+impl std::str::FromStr for OutputFormat {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "json" => Ok(OutputFormat::Json),
+            "text" => Ok(OutputFormat::Text),
+            _ => Err(format!("Invalid output format '{}'. Supported formats: json, text", s)),
+        }
+    }
+}
 
 /// Our command-line arguments.
 #[derive(Debug, StructOpt)]
@@ -102,6 +121,17 @@ struct Opt {
     /// Do not print performance information.
     #[structopt(short = "q", long = "quiet")]
     quiet: bool,
+
+    /// Output performance statistics to the specified file in addition to stderr.
+    /// Stats include total rows processed, bad rows found, processing time, and throughput.
+    /// Use with --output-format to specify the output format (default: json).
+    #[structopt(short = "o", long = "output-stats")]
+    output_stats: Option<PathBuf>,
+
+    /// Format for the statistics output file. Only valid with --output-stats.
+    /// 'json' outputs structured data, 'text' outputs human-readable format.
+    #[structopt(long = "output-format", default_value = "json", requires = "output-stats")]
+    output_format: OutputFormat,
 
     /// Character used to quote entries. May be set to "none" to ignore all
     /// quoting.
@@ -349,9 +379,10 @@ fn run() -> Result<()> {
     wtr.flush().context("error writing records")?;
 
     // Print out some information about our run.
+    let ellapsed = start_time.elapsed().as_secs_f64();
+    let bytes_per_second = (rdr.position().byte() as f64 / ellapsed) as i64;
+
     if !opt.quiet {
-        let ellapsed = start_time.elapsed().as_secs_f64();
-        let bytes_per_second = (rdr.position().byte() as f64 / ellapsed) as i64;
         eprintln!(
             "{} rows ({} bad) in {:.2} seconds, {}/sec",
             rows,
@@ -359,6 +390,40 @@ fn run() -> Result<()> {
             ellapsed,
             bytes_per_second.file_size(file_size_opts::BINARY)?,
         );
+    }
+
+    // Write stats to output file if specified
+    if let Some(output_path) = &opt.output_stats {
+        let mut file = BufWriter::new(
+            File::create(output_path)
+                .with_context(|_| format!("cannot create output file {}", output_path.display()))?
+        );
+
+        let stats_content = match opt.output_format {
+            OutputFormat::Json => {
+                format!(
+                    r#"{{"rows": {}, "bad_rows": {}, "elapsed_seconds": {:.2}, "bytes_per_second": {}}}"#,
+                    rows,
+                    bad_rows,
+                    ellapsed,
+                    bytes_per_second
+                )
+            }
+            OutputFormat::Text => {
+                format!(
+                    "{} rows ({} bad) in {:.2} seconds, {}/sec",
+                    rows,
+                    bad_rows,
+                    ellapsed,
+                    bytes_per_second.file_size(file_size_opts::BINARY)?
+                )
+            }
+        };
+
+        writeln!(file, "{}", stats_content)
+            .with_context(|_| format!("cannot write to output file {}", output_path.display()))?;
+        file.flush()
+            .with_context(|_| format!("cannot flush output file {}", output_path.display()))?;
     }
 
     // If more than 10% of rows are bad, assume something has gone horribly
