@@ -256,3 +256,96 @@ a,b,c
 "#
     );
 }
+
+#[test]
+fn output_stats_json_format() {
+    let testdir = TestDir::new("scrubcsv", "output_stats_json");
+    testdir.create_file(
+        "input.csv",
+        "\
+a,b,c
+1,2,3
+4,5,6
+",
+    );
+    let output = testdir
+        .cmd()
+        .args(&["--output-stats", "stats.json", "--output-format", "json"])
+        .arg("input.csv")
+        .expect_success();
+
+    // Check that CSV output is still correct
+    assert_eq!(
+        output.stdout_str(),
+        "\
+a,b,c
+1,2,3
+4,5,6
+"
+    );
+
+    // Check that stats were written to file
+    let stats_content = std::fs::read_to_string(testdir.path("stats.json"))
+        .expect("Failed to read stats.json");
+    assert!(stats_content.contains(r#""rows": 3"#));
+    assert!(stats_content.contains(r#""bad_rows": 0"#));
+    assert!(stats_content.contains(r#""elapsed_seconds""#));
+    assert!(stats_content.contains(r#""bytes_per_second""#));
+
+    // Verify it's valid JSON structure
+    assert!(stats_content.starts_with("{"));
+    assert!(stats_content.trim_end().ends_with("}"));
+}
+
+#[test]
+fn output_stats_text_format() {
+    let testdir = TestDir::new("scrubcsv", "output_stats_text");
+    testdir.create_file(
+        "input.csv",
+        "\
+name,age
+Alice,25
+Bob,30
+",
+    );
+    let output = testdir
+        .cmd()
+        .args(&["--output-stats", "stats.txt", "--output-format", "text"])
+        .arg("input.csv")
+        .expect_success();
+
+    // Check that CSV output is still correct
+    assert_eq!(
+        output.stdout_str(),
+        "\
+name,age
+Alice,25
+Bob,30
+"
+    );
+
+    // Check that stats were written to file in text format
+    let stats_content = std::fs::read_to_string(testdir.path("stats.txt"))
+        .expect("Failed to read stats.txt");
+    assert!(stats_content.contains("3 rows (0 bad)"));
+    assert!(stats_content.contains("seconds"));
+    assert!(stats_content.contains("/sec"));
+
+    // Verify it matches the stderr format pattern
+    assert!(!stats_content.starts_with("{"));  // Not JSON
+}
+
+#[test]
+fn output_format_requires_output_stats() {
+    let testdir = TestDir::new("scrubcsv", "output_format_dependency");
+    testdir.create_file("input.csv", "a,b,c\n1,2,3\n");
+
+    // This should fail because --output-format requires --output-stats
+    let output = testdir
+        .cmd()
+        .args(&["--output-format", "json"])
+        .arg("input.csv")
+        .expect_failure();
+
+    assert!(output.stderr_str().contains("--output-stats"));
+}

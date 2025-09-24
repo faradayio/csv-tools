@@ -130,8 +130,8 @@ struct Opt {
 
     /// Format for the statistics output file. Only valid with --output-stats.
     /// 'json' outputs structured data, 'text' outputs human-readable format.
-    #[structopt(long = "output-format", default_value = "json", requires = "output-stats")]
-    output_format: OutputFormat,
+    #[structopt(long = "output-format", requires = "output-stats")]
+    output_format: Option<OutputFormat>,
 
     /// Character used to quote entries. May be set to "none" to ignore all
     /// quoting.
@@ -399,7 +399,8 @@ fn run() -> Result<()> {
                 .with_context(|_| format!("cannot create output file {}", output_path.display()))?
         );
 
-        let stats_content = match opt.output_format {
+        let format = opt.output_format.unwrap_or(OutputFormat::Json);
+        let stats_content = match format {
             OutputFormat::Json => {
                 format!(
                     r#"{{"rows": {}, "bad_rows": {}, "elapsed_seconds": {:.2}, "bytes_per_second": {}}}"#,
