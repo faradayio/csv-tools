@@ -3,9 +3,14 @@ name: CI for fixed2csv
 # Controls when the action will run. Triggers the workflow on push or pull request
 # events but only for the master branch
 on:
-  create:
-    tags:
-      - "fixed2csv_*"
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "build-release"
+      - ".github/workflows/ci-fixed2csv.yml"
+      - "fixed2csv/**"
   pull_request:
     # Only run on pull requests against the main branch.
     branches: [main]

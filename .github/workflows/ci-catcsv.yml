@@ -3,9 +3,14 @@ name: CI for catcsv
 # Controls when the action will run. Triggers the workflow on push or pull request
 # events but only for the master branch
 on:
-  create:
-    tags:
-      - "catcsv_*"
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "build-release"
+      - ".github/workflows/ci-catcsv.yml"
+      - "catcsv/**"
   pull_request:
     # Only run on pull requests against the main branch.
     branches: [main]
