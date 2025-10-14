@@ -2,11 +2,13 @@
 #![forbid(unsafe_code)]
 
 // Import from other crates.
+use clap::Parser;
 use csv::ByteRecord;
-use humansize::{file_size_opts, FileSize};
+use humansize::{format_size, BINARY};
 use lazy_static::lazy_static;
 use log::debug;
 use regex::{bytes::Regex as BytesRegex, Regex};
+use serde_json::json;
 use std::{
     borrow::Cow,
     fs,
@@ -15,7 +17,6 @@ use std::{
     process,
     time::Instant,
 };
-use structopt::StructOpt;
 
 // Modules defined in separate files.
 mod clean_column_names;
@@ -34,9 +35,10 @@ use crate::util::CharSpecifier;
 const BUFFER_SIZE: usize = 256 * 1024;
 
 /// Our command-line arguments.
-#[derive(Debug, StructOpt)]
-#[structopt(
+#[derive(Debug, Parser)]
+#[command(
     name = "scrubcsv",
+    version,
     about = "Clean and normalize a CSV file.",
     after_help = "Read a CSV file, normalize the \"good\" lines, and print them to standard
 output.  Discard any lines with the wrong number of columns.
@@ -58,9 +60,9 @@ struct Opt {
 
     /// Character used to separate fields in a row (must be a single ASCII
     /// byte, or "tab").
-    #[structopt(
+    #[arg(
         value_name = "CHAR",
-        short = "d",
+        short = 'd',
         long = "delimiter",
         default_value = ","
     )]
@@ -68,45 +70,49 @@ struct Opt {
 
     /// Convert values matching NULL_REGEX to an empty string. For a case-insensitive
     /// match, use `(?i)`: `--null '(?i)NULL'`.
-    #[structopt(value_name = "NULL_REGEX", short = "n", long = "null")]
+    #[arg(value_name = "NULL_REGEX", short = 'n', long = "null")]
     null: Option<String>,
 
     /// Replace LF and CRLF sequences in values with spaces. This should improve
     /// compatibility with systems like BigQuery that don't expect newlines
     /// inside escaped strings.
-    #[structopt(long = "replace-newlines")]
+    #[arg(long = "replace-newlines")]
     replace_newlines: bool,
 
     /// Remove whitespace at beginning and end of each cell.
-    #[structopt(long = "trim-whitespace")]
+    #[arg(long = "trim-whitespace")]
     trim_whitespace: bool,
 
     /// Make sure column names are unique, and use only lowercase letters,
     /// numbers and underscores. "unique" (the default) will assign number
     /// prefixes to make names unique. "stable" will use a simple, predictable
     /// mapping, and fail with an error if the resulting names are not unique.
-    #[structopt(value_name = "CLEANER_TYPE", long = "clean-column-names")]
+    #[arg(value_name = "CLEANER_TYPE", long = "clean-column-names")]
     clean_column_names: Option<Option<ColumnNameCleanerType>>,
 
     /// Fail if the output CSV file would contain any column names matching the
     /// specified regular expression.
-    #[structopt(long = "reserve-column-names")]
+    #[arg(long = "reserve-column-names")]
     reserve_column_names: Option<Regex>,
 
     /// Drop any rows where the specified column is empty or NULL. Can be passed
     /// more than once. Useful for cleaning primary key columns before
     /// upserting. Uses the cleaned form of column names.
-    #[structopt(value_name = "COL", long = "drop-row-if-null")]
+    #[arg(value_name = "COL", long = "drop-row-if-null")]
     drop_row_if_null: Vec<String>,
 
     /// Do not print performance information.
-    #[structopt(short = "q", long = "quiet")]
+    #[arg(short = 'q', long = "quiet")]
     quiet: bool,
 
     /// Character used to quote entries. May be set to "none" to ignore all
     /// quoting.
-    #[structopt(value_name = "CHAR", long = "quote", default_value = "\"")]
+    #[arg(value_name = "CHAR", long = "quote", default_value = "\"")]
     quote: CharSpecifier,
+
+    /// Output statistics to a JSON file at the specified path.
+    #[arg(value_name = "PATH", long = "output-stats-to-file")]
+    output_stats_to_file: Option<PathBuf>,
 }
 
 impl Opt {
@@ -134,8 +140,8 @@ fn run() -> Result<()> {
     // Set up logging.
     env_logger::init();
 
-    // Parse our command-line arguments using `docopt`.
-    let opt: Opt = Opt::from_args();
+    // Parse our command-line arguments using `clap`.
+    let opt: Opt = Opt::parse();
     debug!("Options: {:#?}", opt);
 
     // Remember the time we started.
@@ -348,17 +354,39 @@ fn run() -> Result<()> {
     // Flush all our buffers.
     wtr.flush().context("error writing records")?;
 
+    // Calculate statistics.
+    let ellapsed = start_time.elapsed().as_secs_f64();
+    let bytes_processed = rdr.position().byte();
+    let bytes_per_second = (bytes_processed as f64 / ellapsed) as i64;
+
     // Print out some information about our run.
     if !opt.quiet {
-        let ellapsed = start_time.elapsed().as_secs_f64();
-        let bytes_per_second = (rdr.position().byte() as f64 / ellapsed) as i64;
         eprintln!(
             "{} rows ({} bad) in {:.2} seconds, {}/sec",
             rows,
             bad_rows,
             ellapsed,
-            bytes_per_second.file_size(file_size_opts::BINARY)?,
+            format_size(bytes_per_second as u64, BINARY),
         );
+    }
+
+    // Output statistics to file if requested.
+    if let Some(stats_path) = &opt.output_stats_to_file {
+        let stats = json!({
+            "rows": rows,
+            "bad_rows": bad_rows,
+            "elapsed_seconds": ellapsed,
+            "bytes_processed": bytes_processed,
+            "bytes_per_second": bytes_per_second,
+        });
+        fs::write(
+            stats_path,
+            serde_json::to_string_pretty(&stats)
+                .context("failed to serialize stats")?,
+        )
+        .with_context(|_| {
+            format!("failed to write stats to {}", stats_path.display())
+        })?;
     }
 
     // If more than 10% of rows are bad, assume something has gone horribly

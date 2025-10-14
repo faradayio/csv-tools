@@ -9,7 +9,7 @@ use std::{error, fmt, result};
 
 /// Our error type. We used a boxed dynamic error because we don't care much
 /// about the details and we're only going to print it for the user anyways.
-pub type Error = Box<dyn error::Error + 'static>;
+pub type Error = Box<dyn error::Error + Send + Sync + 'static>;
 
 /// Our custom `Result` type. Defaults the `E` parameter to our error type.
 pub type Result<T, E = Error> = result::Result<T, E>;
@@ -51,7 +51,7 @@ pub trait ResultExt<T, E>: Sized {
         F: FnOnce(&E) -> C;
 }
 
-impl<T, E: error::Error + 'static> ResultExt<T, E> for Result<T, E> {
+impl<T, E: error::Error + Send + Sync + 'static> ResultExt<T, E> for Result<T, E> {
     fn with_context<C, F>(self, build_context: F) -> Result<T>
     where
         C: Into<String>,

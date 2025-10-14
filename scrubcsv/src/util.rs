@@ -6,7 +6,7 @@ use crate::errors::*;
 
 /// Specifies an optional single-byte character used to configure our CSV
 /// parser.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CharSpecifier(Option<u8>);
 
 impl CharSpecifier {
