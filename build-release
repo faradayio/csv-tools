@@ -23,7 +23,7 @@ VERSION="$RELEASE_VERSION"
 
 # Install 'cargo deny'.
 echo "Installing cargo-deny"
-cargo_deny_version=0.12.1
+cargo_deny_version=0.18.5
 cargo_deny_basename=cargo-deny-$cargo_deny_version-$HOST
 curl -fLO https://github.com/EmbarkStudios/cargo-deny/releases/download/$cargo_deny_version/$cargo_deny_basename.tar.gz
 tar xf $cargo_deny_basename.tar.gz

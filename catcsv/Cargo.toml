@@ -1,6 +1,6 @@
 [package]
 name = "catcsv"
-version = "1.0.0"
+version = "1.0.1"
 authors = ["Eric Kidd <git@randomhacks.net>"]
 edition = "2018"
 
@@ -16,7 +16,7 @@ cli_test_dir = "0.1.2"
 [dependencies]
 csv = "1"
 docopt = "1"
-env_logger = "0.9.0"
+env_logger = "0.11"
 error-chain = "0.12.4"
 log = "0.4.14"
 serde = "1.0.123"

@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use clap::Parser;
 use csv::ByteRecord;
 use log::debug;
 use std::{
@@ -7,7 +8,6 @@ use std::{
     path::PathBuf,
     process,
 };
-use structopt::StructOpt;
 use uuid::Uuid;
 
 /// Use reasonably large input and output buffers. In other CSV tools, this
@@ -16,16 +16,17 @@ use uuid::Uuid;
 const BUFFER_SIZE: usize = 256 * 1024;
 
 /// Command-line options.
-#[derive(Debug, StructOpt)]
-#[structopt(
-    about = "Add an `id` column to a CSV file based on a hash of the other columns"
+#[derive(Debug, Parser)]
+#[command(
+    about = "Add an `id` column to a CSV file based on a hash of the other columns",
+    version
 )]
 struct Opt {
     /// Input file (uses stdin if omitted).
     input: Option<PathBuf>,
 
     /// The column name for the new, hash-based ID column.
-    #[structopt(long = "id-column-name", short = "c", default_value = "id")]
+    #[arg(long = "id-column-name", short = 'c', default_value = "id")]
     id_column_name: String,
 }
 
@@ -34,8 +35,8 @@ fn main() {
     // Set up logging.
     env_logger::init();
 
-    // Parse our command-line arguments using `docopt`.
-    let opt: Opt = Opt::from_args();
+    // Parse our command-line arguments.
+    let opt: Opt = Opt::parse();
     debug!("Options: {:#?}", opt);
 
     if let Err(err) = run(&opt) {
