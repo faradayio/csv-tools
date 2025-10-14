@@ -1,6 +1,7 @@
 //! Integration tests for our CLI.
 
 use cli_test_dir::*;
+use serde_json::Value;
 
 #[test]
 fn help_flag() {
@@ -255,4 +256,47 @@ a,b,c
 a,b,c
 "#
     );
+}
+
+#[test]
+fn output_stats_to_file() {
+    let testdir = TestDir::new("scrubcsv", "output_stats_to_file");
+    testdir.create_file(
+        "in.csv",
+        "\
+a,b,c
+1,2,3
+4,5,6
+7,8,9
+",
+    );
+    let stats_file = testdir.path("stats.json");
+    let output = testdir
+        .cmd()
+        .arg("--output-stats-to-file")
+        .arg(&stats_file)
+        .arg("in.csv")
+        .expect_success();
+
+    assert_eq!(
+        output.stdout_str(),
+        "\
+a,b,c
+1,2,3
+4,5,6
+7,8,9
+"
+    );
+
+    let stats_content =
+        std::fs::read_to_string(&stats_file).expect("failed to read stats file");
+    let stats: Value =
+        serde_json::from_str(&stats_content).expect("failed to parse stats JSON");
+
+    assert_eq!(stats["rows"], 4);
+    assert_eq!(stats["bad_rows"], 0);
+    assert!(stats["elapsed_seconds"].is_number());
+    assert!(stats["bytes_processed"].is_number());
+    assert!(stats["bytes_per_second"].is_number());
+    assert!(stats["bytes_processed"].as_u64().unwrap() > 0);
 }

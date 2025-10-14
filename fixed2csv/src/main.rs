@@ -1,5 +1,6 @@
-use failure::Error;
-use humansize::{file_size_opts, FileSize};
+use anyhow::Error;
+use clap::Parser;
+use humansize::{format_size, BINARY};
 use humantime::format_duration;
 use log::debug;
 use std::{
@@ -7,13 +8,12 @@ use std::{
     io::{prelude::*, stdin, stdout, BufReader},
     time::{Duration, SystemTime},
 };
-use structopt::StructOpt;
 
-#[derive(Debug, StructOpt)]
-/// Convert fixed-width fields on stdin to CSV data on stdout.
+#[derive(Debug, Parser)]
+#[command(about, version)]
 struct Opt {
     /// Print summary statistics.
-    #[structopt(short = "v", long = "verbose")]
+    #[arg(short = 'v', long = "verbose")]
     verbose: bool,
 
     /// One of more field widths, as separate command-line arguments.
@@ -22,7 +22,7 @@ struct Opt {
 
 /// Our main entry point.
 fn main() -> Result<(), Error> {
-    let opt = Opt::from_args();
+    let opt = Opt::parse();
     debug!("Options: {:?}", opt);
 
     // Keep track of how much time this takes.
@@ -42,13 +42,9 @@ fn main() -> Result<(), Error> {
         };
         eprintln!(
             "Processed {} in {}, {}/s",
-            total
-                .file_size(file_size_opts::BINARY)
-                .expect("size can never be negative"),
+            format_size(total, BINARY),
             format_duration(simple_elapsed),
-            (total as u64 / elapsed.as_secs())
-                .file_size(file_size_opts::BINARY)
-                .expect("size can never be negative"),
+            format_size(total as u64 / elapsed.as_secs(), BINARY),
         );
     }
 
