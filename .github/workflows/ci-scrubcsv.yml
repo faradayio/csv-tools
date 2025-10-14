@@ -3,8 +3,7 @@ name: CI for scrubcsv
 # Controls when the action will run. Triggers the workflow on push or pull request
 # events but only for the master branch
 on:
-  push:
-    # Build anything with an appropriate release tag.
+  create:
     tags:
       - "scrubcsv_*"
   pull_request:

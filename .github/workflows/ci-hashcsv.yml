@@ -3,8 +3,7 @@ name: CI for hashcsv
 # Controls when the action will run. Triggers the workflow on push or pull request
 # events but only for the master branch
 on:
-  push:
-    # Build anything with an appropriate release tag.
+  create:
     tags:
       - "hashcsv_*"
   pull_request:
