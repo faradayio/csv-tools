@@ -4,9 +4,6 @@ name: CI for fixed2csv
 # events but only for the master branch
 on:
   push:
-    # Run on the main branch.
-    branches:
-      - main
     # Build anything with an appropriate release tag.
     tags:
       - "fixed2csv_*"
