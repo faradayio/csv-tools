@@ -5,13 +5,11 @@ name: CI for fixed2csv
 on:
   push:
     # Run on the main branch.
-    branches: [main]
+    branches:
+      - main
     # Build anything with an appropriate release tag.
-    tags: ["fixed2csv_*"]
-    paths:
-      - "build-release"
-      - ".github/workflows/ci-fixed2csv.yml"
-      - "fixed2csv/**"
+    tags:
+      - "fixed2csv_*"
   pull_request:
     # Only run on pull requests against the main branch.
     branches: [main]

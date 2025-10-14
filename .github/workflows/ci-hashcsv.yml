@@ -5,13 +5,11 @@ name: CI for hashcsv
 on:
   push:
     # Run on the main branch.
-    branches: [main]
+    branches:
+      - main
     # Build anything with an appropriate release tag.
-    tags: ["hashcsv_*"]
-    paths:
-      - "build-release"
-      - ".github/workflows/ci-hashcsv.yml"
-      - "hashcsv/**"
+    tags:
+      - "hashcsv_*"
   pull_request:
     # Only run on pull requests against the main branch.
     branches: [main]

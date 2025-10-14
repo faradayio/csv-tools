@@ -5,13 +5,11 @@ name: CI for geochunk
 on:
   push:
     # Run on the main branch.
-    branches: [main]
+    branches:
+      - main
     # Build anything with an appropriate release tag.
-    tags: ["geochunk_*"]
-    paths:
-      - "build-release"
-      - ".github/workflows/ci-geochunk.yml"
-      - "geochunk/**"
+    tags:
+      - "geochunk_*"
   pull_request:
     # Only run on pull requests against the main branch.
     branches: [main]

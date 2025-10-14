@@ -5,13 +5,11 @@ name: CI for scrubcsv
 on:
   push:
     # Run on the main branch.
-    branches: [main]
+    branches:
+      - main
     # Build anything with an appropriate release tag.
-    tags: ["scrubcsv_*"]
-    paths:
-      - "build-release"
-      - ".github/workflows/ci-scrubcsv.yml"
-      - "scrubcsv/**"
+    tags:
+      - "scrubcsv_*"
   pull_request:
     # Only run on pull requests against the main branch.
     branches: [main]
