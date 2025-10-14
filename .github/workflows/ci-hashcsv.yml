@@ -36,6 +36,15 @@ jobs:
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
+      - name: Debug GitHub context
+        run: |
+          echo "=== GitHub Context Debug ==="
+          echo "github.ref: ${{ github.ref }}"
+          echo "github.ref_name: ${{ github.ref_name }}"
+          echo "github.ref_type: ${{ github.ref_type }}"
+          echo "github.event_name: ${{ github.event_name }}"
+          echo "startsWith(github.ref, 'refs/tags/hashcsv_'): ${{ startsWith(github.ref, 'refs/tags/hashcsv_') }}"
+          echo "=========================="
       - name: Extract release version
         id: extract_release_version
         run: |
