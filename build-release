@@ -41,8 +41,8 @@ cargo test --package "$PKG_NAME"
 if [ "$CARGO_COMMAND" = "cross" ]; then
     echo "Installing cross for cross-compilation"
     cross_version=v0.2.5
-    cross_basename=cross-$cross_version-$HOST
-    curl -fLO https://github.com/rust-embedded/cross/releases/download/$cross_version/$cross_basename.tar.gz
+    cross_basename=cross-$HOST
+    curl -fLO https://github.com/cross-rs/cross/releases/download/$cross_version/$cross_basename.tar.gz
     tar xf $cross_basename.tar.gz
     mv cross /usr/local/bin/
     rm -rf $cross_basename.tar.gz
