@@ -9,6 +9,47 @@ This repository contains tools for manipulating CSV files, all written in Rust. 
 - [`hashcsv`](./hashcsv): Add a new column to a CSV file, containing a hash of the other columns. Useful for de-duplicating.
 - [`geocode-csv`](https://github.com/faradayio/geocode-csv) **(separate repo)**: Geocode CSV files in bulk using the Smarty API (or other APIs). This is in separate repo beause it depends on `tokio` and networking and a more complicated build system.
 
+## Releasing
+
+To create a new release:
+
+1. **Update version numbers** in the respective `Cargo.toml` files
+2. **Update changelogs** in each tool's `CHANGELOG.md`
+3. **Commit and push** your changes to main
+4. **Install dependencies** (if not already done):
+   ```bash
+   pdm install
+   ```
+5. **Run the release script**:
+   ```bash
+   pdm run python release.py
+   ```
+
+The script will:
+
+- Read current versions from `Cargo.toml` files
+- Create and push git tags (e.g., `catcsv_v1.0.1`)
+- Trigger GitHub Actions workflows to build binaries
+- Create GitHub releases with binaries attached
+
+Each tool is released independently based on its version in `Cargo.toml`.
+
+### Manual release process
+
+If you prefer to do it manually:
+
+1. Create tags:
+
+   ```bash
+   git tag catcsv_v1.0.1
+   git push origin catcsv_v1.0.1
+   ```
+
+2. Trigger the workflow:
+   ```bash
+   gh workflow run ci-catcsv.yml --ref catcsv_v1.0.1
+   ```
+
 ## Current coding standards
 
 In general, this repository should contain standard modern Rust code, formatting using `cargo fmt` and the supplied settings. The code should have no warnings when run with `clippy`.
