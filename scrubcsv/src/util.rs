@@ -20,7 +20,7 @@ impl FromStr for CharSpecifier {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<CharSpecifier> {
-        if s.as_bytes().len() == 1 {
+        if s.len() == 1 {
             Ok(CharSpecifier(Some(s.as_bytes()[0])))
         } else {
             match s {
