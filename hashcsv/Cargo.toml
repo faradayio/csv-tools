@@ -1,6 +1,6 @@
 [package]
 name = "hashcsv"
-version = "1.0.2"
+version = "1.0.3"
 authors = ["Eric Kidd <git@randomhacks.net>"]
 edition = "2018"
 description = "Append an `id` column to each row of a CSV file, containing a UUID v5 hash of the row"
@@ -13,7 +13,7 @@ homepage = "https://github.com/faradayio/csv-tools/blob/main/hashcsv/README.md"
 [dependencies]
 anyhow = "1.0.38"
 clap = { version = "4", features = ["derive", "wrap_help"] }
-csv = "1.1.5"
+csv = "1.4.0"
 env_logger = "0.11"
 log = "0.4.14"
 regex = "1.4.3"
