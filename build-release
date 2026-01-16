@@ -32,7 +32,7 @@ rm -rf $cargo_deny_basename $cargo_deny_basename.tar.gz
 
 # Perform standard checks and tests.
 echo "Verifying code is ready for release"
-cargo deny check
+cargo deny check licenses bans
 cargo fmt -- --check
 cargo clippy -- -D warnings
 cargo test --package "$PKG_NAME"
