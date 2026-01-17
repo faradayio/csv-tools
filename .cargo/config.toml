@@ -1,0 +1,8 @@
+# Configure the Windows GNU target for cross-compilation.
+#
+# Rust 1.70+ emits .drectve directives with -exclude-symbols that the GNU
+# linker doesn't understand, causing linking failures. We also need to ensure
+# ws2_32 (Winsock 2) is linked for network-related std library functions.
+
+[target.x86_64-pc-windows-gnu]
+rustflags = ["-C", "link-arg=-lws2_32"]
